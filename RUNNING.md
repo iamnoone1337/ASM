@@ -1,14 +1,14 @@
 # Running the Subdomain Enumerator
 
-This application requires a proxy server to bypass CORS restrictions when making requests to external APIs.
+This application uses a backend server to make server-side API calls to external services, avoiding CORS restrictions.
 
 ## Setup and Running
 
-1. **Start the proxy server:**
+1. **Start the backend server:**
    ```bash
-   python3 proxy_server.py
+   python3 server.py
    ```
-   This will start a CORS proxy server on `http://localhost:8001`
+   This will start the backend server on `http://localhost:8001`
 
 2. **Start the web server:**
    ```bash
@@ -30,9 +30,9 @@ Test the application with `hackerone.com` to see the subdomain enumeration in ac
 
 ## Architecture
 
-The solution uses a local Python proxy server to:
-- Bypass browser CORS restrictions
-- Make requests to external APIs (crt.sh and web.archive.org)
+The solution uses a backend server to:
+- Make server-side API calls to external services (crt.sh and web.archive.org)
+- Avoid browser CORS restrictions by handling all external requests server-side  
 - Return properly formatted responses to the frontend
 
 This ensures the application can successfully enumerate subdomains without encountering CORS-related errors.
