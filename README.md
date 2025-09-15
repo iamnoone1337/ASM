@@ -19,7 +19,7 @@ A beautiful and modern web application that discovers subdomains for any given d
 ## How to Use
 
 ### Setup
-1. Start the proxy server: `python3 proxy_server.py`
+1. Start the backend server: `python3 server.py`
 2. Start the web server: `python3 -m http.server 8000`
 3. Open `http://localhost:8000` in your browser
 
@@ -34,7 +34,7 @@ A beautiful and modern web application that discovers subdomains for any given d
 
 - **Frontend**: Pure HTML, CSS, and JavaScript (no frameworks required)
 - **APIs**: Uses crt.sh Certificate Transparency API and Web Archive
-- **Proxy**: Python-based CORS proxy server for API access
+- **Backend Server**: Python backend that makes server-side API calls to avoid CORS issues
 - **Styling**: Modern CSS with gradients, glassmorphism, and smooth animations
 - **Icons**: Font Awesome icons for better UX
 - **Fonts**: Inter font family for clean typography
@@ -44,7 +44,7 @@ A beautiful and modern web application that discovers subdomains for any given d
 - `index.html` - Main HTML structure
 - `styles.css` - CSS styling and responsive design
 - `script.js` - JavaScript functionality and API integration
-- `proxy_server.py` - CORS proxy server for external API access
+- `server.py` - Backend server for server-side API calls to external services
 - `RUNNING.md` - Detailed setup and running instructions
 
 ## Browser Compatibility

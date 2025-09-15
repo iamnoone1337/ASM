@@ -15,29 +15,10 @@ class SubdomainDashboard {
     }
 
     configureApiEndpoints() {
-        // Check if we're running in development mode (with proxy server)
-        // This can be detected by checking if we're on localhost:8000 or if proxy is available
-        const isLocalDevelopment = (window.location.hostname === 'localhost' || 
-                                   window.location.hostname === '127.0.0.1') && 
-                                   window.location.port === '8000';
-        
-        // For now, let's also check if there's a query parameter to force production mode
-        const urlParams = new URLSearchParams(window.location.search);
-        const forceProduction = urlParams.get('mode') === 'production';
-        
-        if (isLocalDevelopment && !forceProduction) {
-            // Development mode: use proxy server
-            this.crtApiBase = 'http://localhost:8001/api/crt';
-            this.webarchiveApiBase = 'http://localhost:8001/api/webarchive';
-            this.useProxy = true;
-            console.log('Running in development mode with proxy server');
-        } else {
-            // Production mode: use direct API calls
-            this.crtApiBase = 'https://crt.sh/';
-            this.webarchiveApiBase = 'https://web.archive.org/cdx/search/cdx';
-            this.useProxy = false;
-            console.log('Running in production mode with direct API calls');
-        }
+        // Always use backend server for API calls to avoid CORS issues
+        this.crtApiBase = 'http://localhost:8001/api/crt';
+        this.webarchiveApiBase = 'http://localhost:8001/api/webarchive';
+        console.log('Using backend server for all API calls');
     }
 
     initializeElements() {
@@ -230,147 +211,97 @@ class SubdomainDashboard {
     }
 
     async fetchSubdomainsFromCrtSh(domain) {
-        let url, response, data;
-        
         try {
-            if (this.useProxy) {
-                // Development mode: use proxy server to bypass CORS restrictions
-                url = `${this.crtApiBase}?domain=${encodeURIComponent(domain)}`;
-                
-                response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+            // Always use backend server to make API calls
+            const url = `${this.crtApiBase}?domain=${encodeURIComponent(domain)}`;
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
                 }
+            });
 
-                data = await response.json();
-            } else {
-                // Production mode: direct API call to crt.sh
-                url = `${this.crtApiBase}?q=%.${encodeURIComponent(domain)}&output=json`;
-                
-                response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                    },
-                    mode: 'cors', // Enable CORS for cross-origin requests
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                data = await response.json();
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+
+            const data = await response.json();
+            
+            if (!Array.isArray(data)) {
+                throw new Error('Invalid response format from crt.sh');
+            }
+
+            const subdomains = new Set();
+            
+            data.forEach(cert => {
+                if (cert.name_value) {
+                    const names = cert.name_value.split('\n');
+                    names.forEach(name => {
+                        const cleanName = name.trim().toLowerCase();
+                        if (cleanName.endsWith(`.${domain.toLowerCase()}`) || cleanName === domain.toLowerCase()) {
+                            subdomains.add(cleanName);
+                        }
+                    });
+                }
+            });
+
+            return Array.from(subdomains).sort();
         } catch (error) {
-            if (this.useProxy) {
-                throw new Error(`Proxy server error: ${error.message}`);
-            } else {
-                throw new Error(`Direct API access failed (CORS may be blocking): ${error.message}`);
-            }
+            throw new Error(`Backend server error: ${error.message}`);
         }
-        
-        if (!Array.isArray(data)) {
-            throw new Error('Invalid response format from crt.sh');
-        }
-
-        const subdomains = new Set();
-        
-        data.forEach(cert => {
-            if (cert.name_value) {
-                const names = cert.name_value.split('\n');
-                names.forEach(name => {
-                    const cleanName = name.trim().toLowerCase();
-                    if (cleanName.endsWith(`.${domain.toLowerCase()}`) || cleanName === domain.toLowerCase()) {
-                        subdomains.add(cleanName);
-                    }
-                });
-            }
-        });
-
-        return Array.from(subdomains).sort();
     }
 
     async fetchSubdomainsFromWebArchive(domain) {
-        let url, response, data;
-        
         try {
-            if (this.useProxy) {
-                // Development mode: use proxy server to bypass CORS restrictions
-                url = `${this.webarchiveApiBase}?domain=${encodeURIComponent(domain)}`;
-                
-                response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'text/plain',
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+            // Always use backend server to make API calls
+            const url = `${this.webarchiveApiBase}?domain=${encodeURIComponent(domain)}`;
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'text/plain',
                 }
+            });
 
-                data = await response.text();
-            } else {
-                // Production mode: direct API call to web.archive.org
-                url = `${this.webarchiveApiBase}?url=*.${encodeURIComponent(domain)}&fl=original&collapse=urlkey`;
-                
-                response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'text/plain',
-                    },
-                    mode: 'cors', // Enable CORS for cross-origin requests
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                data = await response.text();
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+
+            const data = await response.text();
+            
+            if (!data || data.trim() === '') {
+                return [];
+            }
+
+            const subdomains = new Set();
+            const lines = data.split('\n');
+            
+            lines.forEach(line => {
+                if (line.trim()) {
+                    try {
+                        // Extract URL from CDX line (URL is the first field)
+                        const url = line.trim();
+                        
+                        // Parse URL to extract hostname
+                        const urlObj = new URL(url.startsWith('http') ? url : 'http://' + url);
+                        const hostname = urlObj.hostname.toLowerCase();
+                        
+                        // Check if hostname belongs to the target domain
+                        if (hostname.endsWith(`.${domain.toLowerCase()}`) || hostname === domain.toLowerCase()) {
+                            subdomains.add(hostname);
+                        }
+                    } catch (e) {
+                        // Skip malformed URLs
+                        console.debug('Skipping malformed URL:', line);
+                    }
+                }
+            });
+
+            return Array.from(subdomains).sort();
         } catch (error) {
-            if (this.useProxy) {
-                throw new Error(`Proxy server error: ${error.message}`);
-            } else {
-                throw new Error(`Direct API access failed (CORS may be blocking): ${error.message}`);
-            }
+            throw new Error(`Backend server error: ${error.message}`);
         }
-        
-        if (!data || data.trim() === '') {
-            return [];
-        }
-
-        const subdomains = new Set();
-        const lines = data.split('\n');
-        
-        lines.forEach(line => {
-            if (line.trim()) {
-                try {
-                    // Extract URL from CDX line (URL is the first field)
-                    const url = line.trim();
-                    
-                    // Parse URL to extract hostname
-                    const urlObj = new URL(url.startsWith('http') ? url : 'http://' + url);
-                    const hostname = urlObj.hostname.toLowerCase();
-                    
-                    // Check if hostname belongs to the target domain
-                    if (hostname.endsWith(`.${domain.toLowerCase()}`) || hostname === domain.toLowerCase()) {
-                        subdomains.add(hostname);
-                    }
-                } catch (e) {
-                    // Skip malformed URLs
-                    console.debug('Skipping malformed URL:', line);
-                }
-            }
-        });
-
-        return Array.from(subdomains).sort();
     }
 
     displayResults(subdomains) {
