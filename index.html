@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subdomain Enumerator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">
+                    <i class="fas fa-search"></i>
+                    Subdomain Enumerator
+                </h1>
+                <p class="subtitle">Discover subdomains using Certificate Transparency logs</p>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="search-section">
+                <div class="search-container">
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            id="domainInput" 
+                            placeholder="Enter domain (e.g., example.com)" 
+                            class="domain-input"
+                        >
+                        <button id="searchBtn" class="search-btn">
+                            <i class="fas fa-search"></i>
+                            <span>Enumerate</span>
+                        </button>
+                    </div>
+                    <div class="input-hint">
+                        <i class="fas fa-info-circle"></i>
+                        Enter a domain name to discover its subdomains from certificate transparency logs
+                    </div>
+                </div>
+            </div>
+
+            <div id="loadingSection" class="loading-section hidden">
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                </div>
+                <p class="loading-text">Searching certificate transparency logs...</p>
+            </div>
+
+            <div id="resultsSection" class="results-section hidden">
+                <div class="results-header">
+                    <h2 class="results-title">
+                        <i class="fas fa-list"></i>
+                        Subdomain Results
+                    </h2>
+                    <div class="results-stats">
+                        <span id="subdomainCount" class="count-badge">0</span>
+                        <span class="count-label">subdomains found</span>
+                    </div>
+                </div>
+                
+                <div class="results-controls">
+                    <div class="search-info">
+                        <i class="fas fa-globe"></i>
+                        <span id="searchedDomain"></span>
+                    </div>
+                    <div class="filter-controls">
+                        <input 
+                            type="text" 
+                            id="filterInput" 
+                            placeholder="Filter subdomains..." 
+                            class="filter-input"
+                        >
+                        <button id="exportBtn" class="export-btn">
+                            <i class="fas fa-download"></i>
+                            Export
+                        </button>
+                    </div>
+                </div>
+
+                <div id="subdomainsList" class="subdomains-list">
+                    <!-- Subdomains will be populated here -->
+                </div>
+            </div>
+
+            <div id="errorSection" class="error-section hidden">
+                <div class="error-content">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Error</h3>
+                    <p id="errorMessage"></p>
+                    <button id="retryBtn" class="retry-btn">
+                        <i class="fas fa-redo"></i>
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>Powered by <a href="https://crt.sh" target="_blank">crt.sh</a> Certificate Transparency logs</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
