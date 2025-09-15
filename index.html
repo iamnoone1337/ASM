@@ -17,30 +17,42 @@
                     Subdomain Enumerator
                 </h1>
                 <p class="subtitle">Discover subdomains using Certificate Transparency logs</p>
+                <nav class="nav-tabs">
+                    <button id="scannerTab" class="nav-tab active">
+                        <i class="fas fa-search"></i>
+                        Scanner
+                    </button>
+                    <button id="dashboardTab" class="nav-tab">
+                        <i class="fas fa-chart-line"></i>
+                        Dashboard
+                    </button>
+                </nav>
             </div>
         </header>
 
         <main class="main-content">
-            <div class="search-section">
-                <div class="search-container">
-                    <div class="input-group">
-                        <input 
-                            type="text" 
-                            id="domainInput" 
-                            placeholder="Enter domain (e.g., example.com)" 
-                            class="domain-input"
-                        >
-                        <button id="searchBtn" class="search-btn">
-                            <i class="fas fa-search"></i>
-                            <span>Enumerate</span>
-                        </button>
-                    </div>
-                    <div class="input-hint">
-                        <i class="fas fa-info-circle"></i>
-                        Enter a domain name to discover its subdomains from certificate transparency logs
+            <!-- Scanner View -->
+            <div id="scannerView" class="view-section active">
+                <div class="search-section">
+                    <div class="search-container">
+                        <div class="input-group">
+                            <input 
+                                type="text" 
+                                id="domainInput" 
+                                placeholder="Enter domain (e.g., example.com)" 
+                                class="domain-input"
+                            >
+                            <button id="searchBtn" class="search-btn">
+                                <i class="fas fa-search"></i>
+                                <span>Enumerate</span>
+                            </button>
+                        </div>
+                        <div class="input-hint">
+                            <i class="fas fa-info-circle"></i>
+                            Enter a domain name to discover its subdomains from certificate transparency logs
+                        </div>
                     </div>
                 </div>
-            </div>
 
             <div id="loadingSection" class="loading-section hidden">
                 <div class="loading-spinner">
@@ -94,6 +106,95 @@
                         <i class="fas fa-redo"></i>
                         Try Again
                     </button>
+                </div>
+            </div>
+            </div>
+
+            <!-- Dashboard View -->
+            <div id="dashboardView" class="view-section">
+                <div class="dashboard-header">
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-globe"></i>
+                            </div>
+                            <div class="stat-content">
+                                <span class="stat-number" id="totalDomains">0</span>
+                                <span class="stat-label">Domains Scanned</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-sitemap"></i>
+                            </div>
+                            <div class="stat-content">
+                                <span class="stat-number" id="totalSubdomains">0</span>
+                                <span class="stat-label">Total Subdomains</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-content">
+                                <span class="stat-number" id="lastScanTime">Never</span>
+                                <span class="stat-label">Last Scan</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-calendar"></i>
+                            </div>
+                            <div class="stat-content">
+                                <span class="stat-number" id="totalScans">0</span>
+                                <span class="stat-label">Total Scans</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-content">
+                    <div class="dashboard-section">
+                        <div class="section-header">
+                            <h3>
+                                <i class="fas fa-history"></i>
+                                Scan History
+                            </h3>
+                            <div class="section-actions">
+                                <button id="clearHistoryBtn" class="action-btn danger">
+                                    <i class="fas fa-trash"></i>
+                                    Clear History
+                                </button>
+                                <button id="exportAllBtn" class="action-btn primary">
+                                    <i class="fas fa-download"></i>
+                                    Export All
+                                </button>
+                            </div>
+                        </div>
+                        <div id="scanHistoryList" class="scan-history-list">
+                            <div class="empty-state">
+                                <i class="fas fa-search"></i>
+                                <h4>No scans yet</h4>
+                                <p>Start by scanning your first domain using the Scanner tab</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-section">
+                        <div class="section-header">
+                            <h3>
+                                <i class="fas fa-chart-bar"></i>
+                                Domain Analytics
+                            </h3>
+                        </div>
+                        <div id="domainAnalytics" class="domain-analytics">
+                            <div class="empty-state">
+                                <i class="fas fa-chart-line"></i>
+                                <h4>No data available</h4>
+                                <p>Analytics will appear here after you scan some domains</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
