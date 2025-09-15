@@ -201,7 +201,8 @@ class SubdomainDashboard {
     }
 
     async fetchSubdomainsFromCrtSh(domain) {
-        const url = `https://crt.sh/?q=%.${domain}&output=json`;
+        // Use local proxy server to bypass CORS restrictions
+        const url = `http://localhost:8001/api/crt?domain=${encodeURIComponent(domain)}`;
         
         const response = await fetch(url, {
             method: 'GET',
@@ -238,7 +239,8 @@ class SubdomainDashboard {
     }
 
     async fetchSubdomainsFromWebArchive(domain) {
-        const url = `https://web.archive.org/cdx/search/cdx?url=*.${domain}&fl=original&collapse=urlkey`;
+        // Use local proxy server to bypass CORS restrictions
+        const url = `http://localhost:8001/api/webarchive?domain=${encodeURIComponent(domain)}`;
         
         const response = await fetch(url, {
             method: 'GET',

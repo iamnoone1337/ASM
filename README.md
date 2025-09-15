@@ -1,11 +1,11 @@
 # Subdomain Enumerator
 
-A beautiful and modern web application that discovers subdomains for any given domain using Certificate Transparency logs from crt.sh.
+A beautiful and modern web application that discovers subdomains for any given domain using Certificate Transparency logs from crt.sh and Web Archive.
 
 ## Features
 
 - **Modern UI**: Clean, responsive design with glassmorphism effects
-- **Real-time Search**: Instant subdomain enumeration using crt.sh API
+- **Real-time Search**: Instant subdomain enumeration using crt.sh API and Web Archive
 - **Interactive Results**: 
   - Filter subdomains by name
   - Copy subdomains to clipboard
@@ -14,20 +14,27 @@ A beautiful and modern web application that discovers subdomains for any given d
 - **Loading States**: Smooth loading animations and progress indicators
 - **Error Handling**: Comprehensive error messages and retry functionality
 - **Mobile Responsive**: Works perfectly on all device sizes
+- **CORS Solution**: Includes proxy server to bypass browser restrictions
 
 ## How to Use
 
-1. Open `index.html` in your web browser
-2. Enter a domain name (e.g., `example.com`) in the input field
-3. Click "Enumerate" or press Enter
-4. Wait for the results to load
-5. Use the filter to search through results
-6. Copy individual subdomains or export all results
+### Setup
+1. Start the proxy server: `python3 proxy_server.py`
+2. Start the web server: `python3 -m http.server 8000`
+3. Open `http://localhost:8000` in your browser
+
+### Usage
+1. Enter a domain name (e.g., `hackerone.com`) in the input field
+2. Click "Enumerate" or press Enter
+3. Wait for the results to load
+4. Use the filter to search through results
+5. Copy individual subdomains or export all results
 
 ## Technical Details
 
 - **Frontend**: Pure HTML, CSS, and JavaScript (no frameworks required)
-- **API**: Uses crt.sh Certificate Transparency API
+- **APIs**: Uses crt.sh Certificate Transparency API and Web Archive
+- **Proxy**: Python-based CORS proxy server for API access
 - **Styling**: Modern CSS with gradients, glassmorphism, and smooth animations
 - **Icons**: Font Awesome icons for better UX
 - **Fonts**: Inter font family for clean typography
@@ -37,6 +44,8 @@ A beautiful and modern web application that discovers subdomains for any given d
 - `index.html` - Main HTML structure
 - `styles.css` - CSS styling and responsive design
 - `script.js` - JavaScript functionality and API integration
+- `proxy_server.py` - CORS proxy server for external API access
+- `RUNNING.md` - Detailed setup and running instructions
 
 ## Browser Compatibility
 
