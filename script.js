@@ -15,10 +15,22 @@ class SubdomainDashboard {
     }
 
     configureApiEndpoints() {
-        // Always use backend server for API calls to avoid CORS issues
-        this.crtApiBase = 'http://localhost:8001/api/crt';
-        this.webarchiveApiBase = 'http://localhost:8001/api/webarchive';
-        console.log('Using backend server for all API calls');
+        // Configure API endpoints based on environment
+        // In production, use the same host as the frontend with port 8001
+        // In development, use localhost
+        const hostname = window.location.hostname;
+        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+        
+        // Use the current hostname for production, localhost for development
+        const apiHost = isLocalhost ? 'localhost' : hostname;
+        const apiProtocol = window.location.protocol;
+        
+        this.crtApiBase = `${apiProtocol}//${apiHost}:8001/api/crt`;
+        this.webarchiveApiBase = `${apiProtocol}//${apiHost}:8001/api/webarchive`;
+        
+        console.log(`API endpoints configured for ${isLocalhost ? 'development' : 'production'}:`);
+        console.log(`- CRT API: ${this.crtApiBase}`);
+        console.log(`- WebArchive API: ${this.webarchiveApiBase}`);
     }
 
     initializeElements() {

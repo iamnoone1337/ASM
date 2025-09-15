@@ -14,14 +14,20 @@ A beautiful and modern web application that discovers subdomains for any given d
 - **Loading States**: Smooth loading animations and progress indicators
 - **Error Handling**: Comprehensive error messages and retry functionality
 - **Mobile Responsive**: Works perfectly on all device sizes
-- **CORS Solution**: Includes proxy server to bypass browser restrictions
+- **CORS Solution**: Includes production-ready proxy server to bypass browser restrictions
+- **Environment-Aware**: Automatically configures API endpoints for development and production
 
 ## How to Use
 
-### Setup
-1. Start the backend server: `python3 server.py`
+### Development Setup
+1. Start the backend server: `python3 server.py --dev`
 2. Start the web server: `python3 -m http.server 8000`
 3. Open `http://localhost:8000` in your browser
+
+### Production Setup
+1. Start the backend server: `python3 server.py`
+2. Start the web server: `python3 -m http.server 8000 --bind 0.0.0.0`
+3. Open `http://your-domain:8000` in your browser
 
 ### Usage
 1. Enter a domain name (e.g., `hackerone.com`) in the input field

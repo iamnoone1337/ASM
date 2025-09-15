@@ -114,9 +114,22 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
             self.send_error(500, f"Error fetching from Web Archive: {str(e)}")
 
 if __name__ == '__main__':
+    import sys
+    import os
+    
     port = 8001
-    server = HTTPServer(('localhost', port), SubdomainAPIHandler)
-    print(f"Subdomain enumeration backend server running on http://localhost:{port}")
+    # Bind to all interfaces for production deployment
+    # Use localhost only in development mode
+    host = 'localhost' if len(sys.argv) > 1 and sys.argv[1] == '--dev' else '0.0.0.0'
+    
+    server = HTTPServer((host, port), SubdomainAPIHandler)
+    
+    if host == 'localhost':
+        print(f"Subdomain enumeration backend server running in DEVELOPMENT mode on http://localhost:{port}")
+    else:
+        print(f"Subdomain enumeration backend server running in PRODUCTION mode on all interfaces:{port}")
+        print(f"Access via: http://<your-domain>:{port}")
+    
     print("Endpoints:")
     print(f"  - GET /api/crt?domain=example.com")
     print(f"  - GET /api/webarchive?domain=example.com")
