@@ -6,7 +6,7 @@ This guide explains how to deploy the Subdomain Enumerator on a VPS (Virtual Pri
 
 The application consists of:
 - **Frontend**: Static HTML, CSS, and JavaScript files
-- **Backend**: Python server that provides API endpoints for crt.sh and Web Archive
+- **Backend**: Python server that provides API endpoints for crt.sh
 
 The frontend uses same-origin API calls by default, eliminating CORS issues in production.
 
@@ -184,9 +184,6 @@ Test API endpoints:
 ```bash
 # Test crt.sh API
 curl "https://your-domain.com/api/crt?domain=example.com"
-
-# Test Web Archive API
-curl "https://your-domain.com/api/webarchive?domain=example.com"
 ```
 
 ## Security Considerations

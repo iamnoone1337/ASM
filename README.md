@@ -1,11 +1,11 @@
 # Subdomain Enumerator
 
-A beautiful and modern web application that discovers subdomains for any given domain using Certificate Transparency logs from crt.sh and Web Archive.
+A beautiful and modern web application that discovers subdomains for any given domain using Certificate Transparency logs from crt.sh.
 
 ## Features
 
 - **Modern UI**: Clean, responsive design with glassmorphism effects
-- **Real-time Search**: Instant subdomain enumeration using crt.sh API and Web Archive
+- **Real-time Search**: Instant subdomain enumeration using crt.sh API
 - **Interactive Results**: 
   - Filter subdomains by name
   - Copy subdomains to clipboard
@@ -38,7 +38,7 @@ For VPS deployment, see [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive setup g
 ## Technical Details
 
 - **Frontend**: Pure HTML, CSS, and JavaScript (no frameworks required)
-- **APIs**: Uses crt.sh Certificate Transparency API and Web Archive
+- **APIs**: Uses crt.sh Certificate Transparency API
 - **Backend Server**: Python backend that makes server-side API calls to avoid CORS issues
 - **Styling**: Modern CSS with gradients, glassmorphism, and smooth animations
 - **Icons**: Font Awesome icons for better UX
