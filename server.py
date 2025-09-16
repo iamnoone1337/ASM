@@ -131,7 +131,7 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
                 return
             
             # Make server-side API call to Web Archive using the specified URL format
-            archive_url = f"https://web.archive.org/cdx/search/cdx?url=*.{domain}&fl=original&collapse=json"
+            archive_url = f"https://web.archive.org/cdx/search/cdx?url=*.{domain}&fl=original&collapse=urlkey"
             
             try:
                 # Create SSL context for secure connection
