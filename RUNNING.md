@@ -31,7 +31,7 @@ Test the application with `hackerone.com` to see the subdomain enumeration in ac
 ## Architecture
 
 The solution uses a backend server to:
-- Make server-side API calls to external services (crt.sh and web.archive.org)
+- Make server-side API calls to external services (crt.sh)
 - Avoid browser CORS restrictions by handling all external requests server-side  
 - Return properly formatted responses to the frontend
 
