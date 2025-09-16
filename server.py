@@ -184,7 +184,7 @@ if __name__ == '__main__':
     
     print("\nServer-side API calls to:")
     print("  - https://crt.sh/?q=%.DOMAIN&output=json")
-    print("  - https://web.archive.org/cdx/search/cdx?url=*.DOMAIN&fl=original&collapse=json")
+    print("  - https://web.archive.org/cdx/search/cdx?url=*.DOMAIN&fl=original&collapse=urlkey")
     print(f"\nEnvironment variables:")
     print(f"  HOST={host} (default: 0.0.0.0)")
     print(f"  PORT={port} (default: 8001)")
