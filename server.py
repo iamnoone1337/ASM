@@ -7,7 +7,7 @@ import json
 import urllib.request
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler, SimpleHTTPRequestHandler
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, quote
 import ssl
 import os
 import mimetypes
@@ -130,15 +130,28 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
                 self.send_error(400, "Missing domain parameter")
                 return
             
-            # Make server-side API call to Web Archive using the specified URL format
-            archive_url = f"https://web.archive.org/cdx/search/cdx?url=*.{domain}&fl=original&collapse=json"
+            # URL-encode the domain parameter safely
+            domain_q = quote(domain, safe="")
+            
+            # Primary CDX query with matchType=domain and trailing /*
+            primary_url = f"https://web.archive.org/cdx/search/cdx?url={domain_q}/*&matchType=domain&fl=original&collapse=urlkey"
             
             try:
                 # Create SSL context for secure connection
                 ssl_context = ssl.create_default_context()
                 
-                with urllib.request.urlopen(archive_url, context=ssl_context) as response:
+                req = urllib.request.Request(primary_url)
+                req.add_header('User-Agent', 'ASM-SubdomainEnumerator/1.0')
+                with urllib.request.urlopen(req, context=ssl_context, timeout=10) as response:
                     data = response.read()
+                    
+                # If primary returns empty data, try fallback with wildcard
+                if not data.strip():
+                    fallback_url = f"https://web.archive.org/cdx/search/cdx?url=*.{domain_q}/*&fl=original&collapse=urlkey"
+                    req = urllib.request.Request(fallback_url)
+                    req.add_header('User-Agent', 'ASM-SubdomainEnumerator/1.0')
+                    with urllib.request.urlopen(req, context=ssl_context, timeout=10) as response:
+                        data = response.read()
                     
                 # Send response with CORS headers
                 self.send_response(200)
@@ -184,7 +197,7 @@ if __name__ == '__main__':
     
     print("\nServer-side API calls to:")
     print("  - https://crt.sh/?q=%.DOMAIN&output=json")
-    print("  - https://web.archive.org/cdx/search/cdx?url=*.DOMAIN&fl=original&collapse=urlkey")
+    print("  - https://web.archive.org/cdx/search/cdx?url=DOMAIN/*&matchType=domain&fl=original&collapse=urlkey")
     print(f"\nEnvironment variables:")
     print(f"  HOST={host} (default: 0.0.0.0)")
     print(f"  PORT={port} (default: 8001)")
