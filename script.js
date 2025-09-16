@@ -16,8 +16,8 @@ class SubdomainDashboard {
 
     configureApiEndpoints() {
         // Always use backend server for API calls to avoid CORS issues
-        this.crtApiBase = 'http://localhost:8001/api/crt';
-        this.webarchiveApiBase = 'http://localhost:8001/api/webarchive';
+        this.crtApiBase = 'http://127.0.0.1:8001/api/crt';
+        this.webarchiveApiBase = 'http://127.0.0.1:8001/api/webarchive';
         console.log('Using backend server for all API calls');
     }
 
@@ -232,21 +232,8 @@ class SubdomainDashboard {
                 throw new Error('Invalid response format from crt.sh');
             }
 
-            const subdomains = new Set();
-            
-            data.forEach(cert => {
-                if (cert.name_value) {
-                    const names = cert.name_value.split('\n');
-                    names.forEach(name => {
-                        const cleanName = name.trim().toLowerCase();
-                        if (cleanName.endsWith(`.${domain.toLowerCase()}`) || cleanName === domain.toLowerCase()) {
-                            subdomains.add(cleanName);
-                        }
-                    });
-                }
-            });
-
-            return Array.from(subdomains).sort();
+            // Backend now returns pre-filtered and sorted subdomain list
+            return data;
         } catch (error) {
             throw new Error(`Backend server error: ${error.message}`);
         }
@@ -260,7 +247,7 @@ class SubdomainDashboard {
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
-                    'Accept': 'text/plain',
+                    'Accept': 'application/json',
                 }
             });
 
@@ -268,37 +255,14 @@ class SubdomainDashboard {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const data = await response.text();
+            const data = await response.json();
             
-            if (!data || data.trim() === '') {
-                return [];
+            if (!Array.isArray(data)) {
+                throw new Error('Invalid response format from Web Archive');
             }
 
-            const subdomains = new Set();
-            const lines = data.split('\n');
-            
-            lines.forEach(line => {
-                if (line.trim()) {
-                    try {
-                        // Extract URL from CDX line (URL is the first field)
-                        const url = line.trim();
-                        
-                        // Parse URL to extract hostname
-                        const urlObj = new URL(url.startsWith('http') ? url : 'http://' + url);
-                        const hostname = urlObj.hostname.toLowerCase();
-                        
-                        // Check if hostname belongs to the target domain
-                        if (hostname.endsWith(`.${domain.toLowerCase()}`) || hostname === domain.toLowerCase()) {
-                            subdomains.add(hostname);
-                        }
-                    } catch (e) {
-                        // Skip malformed URLs
-                        console.debug('Skipping malformed URL:', line);
-                    }
-                }
-            });
-
-            return Array.from(subdomains).sort();
+            // Backend now returns pre-filtered and sorted subdomain list
+            return data;
         } catch (error) {
             throw new Error(`Backend server error: ${error.message}`);
         }

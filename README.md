@@ -14,14 +14,16 @@ A beautiful and modern web application that discovers subdomains for any given d
 - **Loading States**: Smooth loading animations and progress indicators
 - **Error Handling**: Comprehensive error messages and retry functionality
 - **Mobile Responsive**: Works perfectly on all device sizes
-- **CORS Solution**: Includes proxy server to bypass browser restrictions
+- **CORS Solution**: Server-side API processing eliminates browser CORS restrictions
 
 ## How to Use
 
 ### Setup
-1. Start the backend server: `python3 server.py`
+1. Start the backend server: `python3 server.py` (listens on http://127.0.0.1:8001)
 2. Start the web server: `python3 -m http.server 8000`
 3. Open `http://localhost:8000` in your browser
+
+**Important**: All external requests to crt.sh and Web Archive are made server-side by the backend to avoid CORS issues. The browser never calls those origins directly.
 
 ### Usage
 1. Enter a domain name (e.g., `hackerone.com`) in the input field
@@ -33,8 +35,11 @@ A beautiful and modern web application that discovers subdomains for any given d
 ## Technical Details
 
 - **Frontend**: Pure HTML, CSS, and JavaScript (no frameworks required)
-- **APIs**: Uses crt.sh Certificate Transparency API and Web Archive
-- **Backend Server**: Python backend that makes server-side API calls to avoid CORS issues
+- **Backend API Endpoints**:
+  - `GET /api/crt?domain={domain}` - Server-side calls to https://crt.sh/?q=%.{domain}&output=json
+  - `GET /api/webarchive?domain={domain}` - Server-side calls to https://web.archive.org/cdx/search/cdx?url=*.{domain}&fl=original&collapse=urlkey
+- **Server-side Processing**: Backend parses and filters subdomain results before sending to frontend
+- **CORS Solution**: All external API calls are made server-side to avoid browser CORS restrictions
 - **Styling**: Modern CSS with gradients, glassmorphism, and smooth animations
 - **Icons**: Font Awesome icons for better UX
 - **Fonts**: Inter font family for clean typography
