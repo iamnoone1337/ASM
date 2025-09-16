@@ -30,10 +30,8 @@ class SubdomainDashboard {
         }
         
         this.crtApiBase = `${apiBase}/crt`;
-        this.webarchiveApiBase = `${apiBase}/webarchive`;
         console.log('Configured API endpoints:', {
-            crt: this.crtApiBase,
-            webarchive: this.webarchiveApiBase
+            crt: this.crtApiBase
         });
     }
 
@@ -191,35 +189,15 @@ class SubdomainDashboard {
         this.hideResults();
 
         try {
-            // Fetch subdomains from both sources concurrently
-            const [crtSubdomains, webArchiveSubdomains] = await Promise.allSettled([
-                this.fetchSubdomainsFromCrtSh(domain),
-                this.fetchSubdomainsFromWebArchive(domain)
-            ]);
-
-            // Combine results from both sources
-            const allSubdomains = new Set();
+            // Fetch subdomains from crt.sh
+            const subdomains = await this.fetchSubdomainsFromCrtSh(domain);
             
-            if (crtSubdomains.status === 'fulfilled') {
-                crtSubdomains.value.forEach(subdomain => allSubdomains.add(subdomain));
-            } else {
-                console.warn('crt.sh failed:', crtSubdomains.reason);
+            if (subdomains.length === 0) {
+                throw new Error('No subdomains found');
             }
             
-            if (webArchiveSubdomains.status === 'fulfilled') {
-                webArchiveSubdomains.value.forEach(subdomain => allSubdomains.add(subdomain));
-            } else {
-                console.warn('Web Archive failed:', webArchiveSubdomains.reason);
-            }
-
-            const finalSubdomains = Array.from(allSubdomains).sort();
-            
-            if (finalSubdomains.length === 0) {
-                throw new Error('No subdomains found from any source');
-            }
-            
-            this.displayResults(finalSubdomains);
-            this.saveScanResult(domain, finalSubdomains);
+            this.displayResults(subdomains);
+            this.saveScanResult(domain, subdomains);
         } catch (error) {
             console.error('Error fetching subdomains:', error);
             this.showError(`Failed to fetch subdomains: ${error.message}`);
@@ -268,58 +246,6 @@ class SubdomainDashboard {
         }
     }
 
-    async fetchSubdomainsFromWebArchive(domain) {
-        try {
-            // Always use backend server to make API calls
-            const url = `${this.webarchiveApiBase}?domain=${encodeURIComponent(domain)}`;
-            
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'text/plain',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.text();
-            
-            if (!data || data.trim() === '') {
-                return [];
-            }
-
-            const subdomains = new Set();
-            const lines = data.split('\n');
-            
-            lines.forEach(line => {
-                if (line.trim()) {
-                    try {
-                        // Extract URL from CDX line (URL is the first field)
-                        const url = line.trim();
-                        
-                        // Parse URL to extract hostname
-                        const urlObj = new URL(url.startsWith('http') ? url : 'http://' + url);
-                        const hostname = urlObj.hostname.toLowerCase();
-                        
-                        // Check if hostname belongs to the target domain
-                        if (hostname.endsWith(`.${domain.toLowerCase()}`) || hostname === domain.toLowerCase()) {
-                            subdomains.add(hostname);
-                        }
-                    } catch (e) {
-                        // Skip malformed URLs
-                        console.debug('Skipping malformed URL:', line);
-                    }
-                }
-            });
-
-            return Array.from(subdomains).sort();
-        } catch (error) {
-            throw new Error(`Backend server error: ${error.message}`);
-        }
-    }
-
     displayResults(subdomains) {
         this.hideLoading();
         this.showResults();
@@ -334,7 +260,7 @@ class SubdomainDashboard {
                 <div class="no-results">
                     <i class="fas fa-search"></i>
                     <h3>No subdomains found</h3>
-                    <p>No subdomains were found for <strong>${this.currentDomain}</strong> in certificate transparency logs or web archive.</p>
+                    <p>No subdomains were found for <strong>${this.currentDomain}</strong> in certificate transparency logs.</p>
                 </div>
             `;
             return;

@@ -28,8 +28,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
         # Handle API endpoints
         if parsed_path.path == '/api/crt':
             self.handle_crt_api(parsed_path)
-        elif parsed_path.path == '/api/webarchive':
-            self.handle_webarchive_api(parsed_path)
         else:
             # Handle static file serving if STATIC_DIR is configured
             static_dir = os.environ.get('STATIC_DIR')
@@ -119,47 +117,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
             print(f"Error in crt.sh API handler: {e}")
             self.send_error(500, f"Error fetching from crt.sh: {str(e)}")
 
-    def handle_webarchive_api(self, parsed_path):
-        """Handle Web Archive API requests - server-side call"""
-        try:
-            # Extract domain from query parameters
-            query_params = parse_qs(parsed_path.query)
-            domain = query_params.get('domain', [None])[0]
-            
-            if not domain:
-                self.send_error(400, "Missing domain parameter")
-                return
-            
-            # Make server-side API call to Web Archive using the specified URL format
-            archive_url = f"https://web.archive.org/cdx/search/cdx?url=*.{domain}&fl=original&collapse=urlkey"
-            
-            try:
-                # Create SSL context for secure connection
-                ssl_context = ssl.create_default_context()
-                
-                with urllib.request.urlopen(archive_url, context=ssl_context) as response:
-                    data = response.read()
-                    
-                # Send response with CORS headers
-                self.send_response(200)
-                self.send_header('Content-Type', 'text/plain')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(data)
-                
-            except Exception as api_error:
-                print(f"Error calling Web Archive API: {api_error}")
-                # Return empty string if API call fails
-                self.send_response(200)
-                self.send_header('Content-Type', 'text/plain')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(b"")
-                
-        except Exception as e:
-            print(f"Error in Web Archive API handler: {e}")
-            self.send_error(500, f"Error fetching from Web Archive: {str(e)}")
-
 if __name__ == '__main__':
     # Get configuration from environment variables
     host = os.environ.get('HOST', '0.0.0.0')
@@ -171,7 +128,6 @@ if __name__ == '__main__':
     print(f"Subdomain enumeration server running on http://{host}:{port}")
     print("API Endpoints:")
     print(f"  - GET /api/crt?domain=example.com")
-    print(f"  - GET /api/webarchive?domain=example.com")
     
     if static_dir:
         if os.path.isdir(static_dir):
@@ -184,7 +140,6 @@ if __name__ == '__main__':
     
     print("\nServer-side API calls to:")
     print("  - https://crt.sh/?q=%.DOMAIN&output=json")
-    print("  - https://web.archive.org/cdx/search/cdx?url=*.DOMAIN&fl=original&collapse=urlkey")
     print(f"\nEnvironment variables:")
     print(f"  HOST={host} (default: 0.0.0.0)")
     print(f"  PORT={port} (default: 8001)")
