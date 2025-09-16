@@ -4,7 +4,8 @@ class SubdomainDashboard {
         this.currentView = 'scanner';
         this.currentDomain = '';
         this.allSubdomains = [];
-        
+        this.currentMetadata = {}; // subdomain -> meta
+
         // Configure API endpoints based on environment
         this.configureApiEndpoints();
         
@@ -30,8 +31,10 @@ class SubdomainDashboard {
         }
         
         this.crtApiBase = `${apiBase}/crt`;
+        this.metaApiBase = `${apiBase}/meta`;
         console.log('Configured API endpoints:', {
-            crt: this.crtApiBase
+            crt: this.crtApiBase,
+            meta: this.metaApiBase
         });
     }
 
@@ -115,7 +118,7 @@ class SubdomainDashboard {
         }
     }
 
-    saveScanResult(domain, subdomains) {
+    saveScanResult(domain, subdomains, metadataMap = {}) {
         const timestamp = new Date().toISOString();
         const scanId = `scan_${Date.now()}`;
 
@@ -134,6 +137,7 @@ class SubdomainDashboard {
             id: scanId,
             timestamp: timestamp,
             subdomains: subdomains,
+            metadata: metadataMap,
             count: subdomains.length
         });
 
@@ -198,8 +202,15 @@ class SubdomainDashboard {
                 throw new Error('No subdomains found from crt.sh');
             }
             
+            // Draw the list first
             this.displayResults(finalSubdomains);
-            this.saveScanResult(domain, finalSubdomains);
+
+            // Then enrich with metadata in batches
+            this.currentMetadata = {};
+            await this.enrichSubdomainsWithMetadata(finalSubdomains);
+
+            // Save scan including metadata so dashboard shows it later
+            this.saveScanResult(domain, finalSubdomains, this.currentMetadata);
         } catch (error) {
             console.error('Error fetching subdomains:', error);
             this.showError(`Failed to fetch subdomains: ${error.message}`);
@@ -248,6 +259,45 @@ class SubdomainDashboard {
         }
     }
 
+    async enrichSubdomainsWithMetadata(subdomains) {
+        const batchSize = 25;
+        for (let i = 0; i < subdomains.length; i += batchSize) {
+            const batch = subdomains.slice(i, i + batchSize);
+            try {
+                const results = await this.fetchMetadataBatch(batch);
+                results.forEach(res => {
+                    const host = res.host || '';
+                    if (!host) return;
+                    this.currentMetadata[host] = res;
+                    this.updateSubdomainItemUI(host, res);
+                });
+            } catch (e) {
+                console.warn('Metadata batch failed:', e);
+            }
+        }
+    }
+
+    async fetchMetadataBatch(hosts) {
+        const resp = await fetch(this.metaApiBase, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ hosts, timeout_ms: 4000 })
+        });
+        if (!resp.ok) {
+            throw new Error(`Meta API error: ${resp.status}`);
+        }
+        return await resp.json();
+    }
+
+    applyMetadataToUI(metadataMap) {
+        Object.entries(metadataMap || {}).forEach(([host, meta]) => {
+            this.updateSubdomainItemUI(host, meta);
+        });
+    }
+
     displayResults(subdomains) {
         this.hideLoading();
         this.showResults();
@@ -290,6 +340,10 @@ class SubdomainDashboard {
                     <span class="subdomain-name">${subdomain}</span>
                     <span class="subdomain-type ${subdomainType}">${isMainDomain ? 'Main Domain' : 'Subdomain'}</span>
                 </div>
+                <div class="subdomain-meta">
+                    <span class="status-badge status-unknown" data-role="status">Checking...</span>
+                    <span class="subdomain-title" data-role="title"></span>
+                </div>
                 <div class="subdomain-actions">
                     <button class="action-btn copy-btn" onclick="navigator.clipboard.writeText('${subdomain}')" title="Copy to clipboard">
                         <i class="fas fa-copy"></i>
@@ -304,13 +358,48 @@ class SubdomainDashboard {
         return element;
     }
 
+    updateSubdomainItemUI(subdomain, meta) {
+        const selector = `.subdomain-item[data-subdomain="${window.CSS && CSS.escape ? CSS.escape(subdomain) : subdomain}"]`;
+        const item = this.subdomainsList.querySelector(selector);
+        if (!item) return;
+
+        const badge = item.querySelector('[data-role="status"]');
+        const titleEl = item.querySelector('[data-role="title"]');
+
+        const status = typeof meta?.status_code === 'number' ? meta.status_code : null;
+        const title = meta?.title || '';
+
+        // Reset classes
+        badge.classList.remove('status-up', 'status-warn', 'status-down', 'status-unknown');
+
+        if (status === null) {
+            badge.textContent = 'No Response';
+            badge.classList.add('status-unknown');
+        } else if (status >= 200 && status < 300) {
+            badge.textContent = `${status}`;
+            badge.classList.add('status-up');
+        } else if (status >= 300 && status < 400) {
+            badge.textContent = `${status}`;
+            badge.classList.add('status-up');
+        } else if (status >= 400 && status < 500) {
+            badge.textContent = `${status}`;
+            badge.classList.add('status-warn');
+        } else {
+            badge.textContent = `${status}`;
+            badge.classList.add('status-down');
+        }
+
+        titleEl.textContent = title ? `— ${title}` : '';
+    }
+
     filterSubdomains() {
         const filter = this.filterInput.value.toLowerCase();
         const items = this.subdomainsList.querySelectorAll('.subdomain-item');
         
         items.forEach(item => {
             const subdomain = item.dataset.subdomain;
-            if (subdomain.includes(filter)) {
+            const title = (item.querySelector('[data-role="title"]')?.textContent || '').toLowerCase();
+            if (subdomain.includes(filter) || title.includes(filter)) {
                 item.style.display = 'block';
             } else {
                 item.style.display = 'none';
@@ -462,6 +551,27 @@ class SubdomainDashboard {
             .sort((a, b) => b.totalSubdomains - a.totalSubdomains)
             .slice(0, 10);
 
+        // HTTP status overview from the latest scan per domain (if metadata exists)
+        const httpOverview = [];
+        topDomains.forEach(d => {
+            const lastScan = d.scans[d.scans.length - 1];
+            const meta = (lastScan && lastScan.metadata) || {};
+            const counters = { up: 0, warn: 0, down: 0, unknown: 0 };
+            Object.values(meta).forEach(m => {
+                const s = m?.status_code;
+                if (typeof s !== 'number') {
+                    counters.unknown++;
+                } else if (s >= 200 && s < 400) {
+                    counters.up++;
+                } else if (s >= 400 && s < 500) {
+                    counters.warn++;
+                } else {
+                    counters.down++;
+                }
+            });
+            httpOverview.push({ domain: d.domain, counters, total: d.totalSubdomains });
+        });
+
         analyticsContainer.innerHTML = `
             <div class="analytics-content">
                 <h4>Top Domains by Subdomain Count</h4>
@@ -471,6 +581,19 @@ class SubdomainDashboard {
                             <span class="analytics-domain">${domain.domain}</span>
                             <span class="analytics-count">${domain.totalSubdomains} subdomains</span>
                             <span class="analytics-scans">${domain.scans.length} scans</span>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <h4 style="margin-top: 20px;">HTTP Status Overview (latest scan)</h4>
+                <div class="analytics-list">
+                    ${httpOverview.map(row => `
+                        <div class="analytics-item">
+                            <span class="analytics-domain">${row.domain}</span>
+                            <span class="status-chip status-up">Up: ${row.counters.up}</span>
+                            <span class="status-chip status-warn">4xx: ${row.counters.warn}</span>
+                            <span class="status-chip status-down">5xx: ${row.counters.down}</span>
+                            <span class="status-chip status-unknown">No Resp: ${row.counters.unknown}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -491,7 +614,9 @@ class SubdomainDashboard {
         this.domainInput.value = domain;
         this.currentDomain = domain;
         this.allSubdomains = scan.subdomains;
+        this.currentMetadata = scan.metadata || {};
         this.displayResults(scan.subdomains);
+        this.applyMetadataToUI(this.currentMetadata);
     }
 
     exportScanData(domain, scanId) {
