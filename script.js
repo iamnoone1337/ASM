@@ -15,10 +15,26 @@ class SubdomainDashboard {
     }
 
     configureApiEndpoints() {
-        // Always use backend server for API calls to avoid CORS issues
-        this.crtApiBase = 'http://localhost:8001/api/crt';
-        this.webarchiveApiBase = 'http://localhost:8001/api/webarchive';
-        console.log('Using backend server for all API calls');
+        // Check for custom API base URL override from meta tag
+        const apiBaseMetaTag = document.querySelector('meta[name="api-base-url"]');
+        let apiBase;
+        
+        if (apiBaseMetaTag && apiBaseMetaTag.content) {
+            // Use custom API base URL from meta tag
+            apiBase = apiBaseMetaTag.content.replace(/\/$/, ''); // Remove trailing slash
+            console.log('Using custom API base from meta tag:', apiBase);
+        } else {
+            // Use same-origin relative API endpoints by default
+            apiBase = `${window.location.origin}/api`;
+            console.log('Using same-origin API base:', apiBase);
+        }
+        
+        this.crtApiBase = `${apiBase}/crt`;
+        this.webarchiveApiBase = `${apiBase}/webarchive`;
+        console.log('Configured API endpoints:', {
+            crt: this.crtApiBase,
+            webarchive: this.webarchiveApiBase
+        });
     }
 
     initializeElements() {

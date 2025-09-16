@@ -18,10 +18,15 @@ A beautiful and modern web application that discovers subdomains for any given d
 
 ## How to Use
 
-### Setup
-1. Start the backend server: `python3 server.py`
-2. Start the web server: `python3 -m http.server 8000`
-3. Open `http://localhost:8000` in your browser
+### Development Setup
+For local development, see [RUNNING.md](RUNNING.md) for detailed instructions.
+
+### Production Deployment
+For VPS deployment, see [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive setup guides including:
+- Single-process mode (simple setup)
+- Nginx reverse proxy mode (recommended)
+- SSL/TLS configuration
+- Systemd service setup
 
 ### Usage
 1. Enter a domain name (e.g., `hackerone.com`) in the input field
@@ -45,7 +50,8 @@ A beautiful and modern web application that discovers subdomains for any given d
 - `styles.css` - CSS styling and responsive design
 - `script.js` - JavaScript functionality and API integration
 - `server.py` - Backend server for server-side API calls to external services
-- `RUNNING.md` - Detailed setup and running instructions
+- `RUNNING.md` - Development setup and running instructions
+- `DEPLOYMENT.md` - Production deployment guide for VPS
 
 ## Browser Compatibility
 
