@@ -1,31 +1,32 @@
 class SubdomainDashboard {
     constructor() {
         this.storageKey = 'subdomain_scanner_data';
-        this.currentView = 'scanner';
+        this.currentView = 'scanner'; // scanner | dashboard | asset
         this.currentDomain = '';
         this.allSubdomains = [];
         this.currentMetadata = {};
-        this.monitorStatus = null; // {enabled, interval_hours, last_results, last_new, ...}
-        this.lastEventsTs = null;  // ISO timestamp for polling updates
+        this.monitorStatus = null;
+        this.lastEventsTs = null;
+        this.assetDomain = null;
 
         // Configure API endpoints based on environment
         this.configureApiEndpoints();
 
-        // Inject minimal UI styles (sidebar + table + status badges + new-asset + toast)
+        // Inject styles (sidebar/table/status/new/asset tabs)
         this.injectUIStyles();
 
         this.initializeElements();
         this.bindEvents();
         this.loadStoredData();
         this.updateDashboardStats();
+        this.updateAssetsSidebar();
 
-        // Start monitoring updates poller (30s)
+        // Poll monitor updates
         this.startUpdatesPolling();
     }
 
     injectUIStyles() {
         const css = `
-        /* App shell layout + sidebar (kept from previous changes) */
         .app-shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; background: #f8fafc; }
         .sidebar { background: #ffffff; border-right: 1px solid #e5e7eb; padding: 16px; }
         .content { min-width: 0; }
@@ -41,10 +42,15 @@ class SubdomainDashboard {
         .nav-subitem { color: #374151; font-weight: 600; padding: 6px 10px; border-radius: 10px; }
         .nav-subitem:hover { background: #f3f4f6; }
         .nav-subitem.active { background: #e0ecff; color: #1d4ed8; }
+        .asset-node { margin-top: 4px; }
+        .asset-node summary { padding: 6px 10px; border-radius: 10px; cursor: pointer; display:flex; align-items:center; gap:8px; }
+        .asset-node summary:hover { background:#f3f4f6; }
+        .asset-children { display:flex; flex-direction: column; gap:6px; margin-left: 8px; padding-left:10px; border-left:2px solid #eef2f7; }
+        .asset-link { color:#2563eb; font-weight:600; padding:4px 8px; border-radius:8px; }
+        .asset-link:hover { background:#eef2ff; }
 
         .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
 
-        /* Table */
         .table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
         table.sd-table { width: 100%; border-collapse: separate; border-spacing: 0; }
         .sd-table thead th { background: #f9fafb; text-align: left; font-weight: 700; font-size: 13px; color: #374151; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
@@ -52,7 +58,6 @@ class SubdomainDashboard {
         .sd-table tbody tr:hover { background: #f9fafb; }
         .sd-table .col-actions { white-space: nowrap; }
 
-        /* Status badge colors */
         .status-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius: 999px; font-weight:700; font-size:12px; border:1px solid #cbd5e0; background:#e2e8f0; color:#2d3748; }
         .status-badge .dot { width:8px; height:8px; border-radius:50%; background:#a0aec0; }
         .status-up { background:#e6fffa; color:#276749; border-color:#9ae6b4; }
@@ -64,21 +69,20 @@ class SubdomainDashboard {
         .status-unknown { background:#edf2f7; color:#4a5568; border-color:#cbd5e0; }
         .status-unknown .dot { background:#a0aec0; }
 
-        /* New asset highlighting */
         .row-new { background: #eef2ff !important; }
         .new-chip { display:inline-block; margin-left:8px; padding:2px 6px; font-size:11px; font-weight:700; border-radius:10px; background:#dbeafe; color:#1d4ed8; border:1px solid #bfdbfe; }
 
-        /* Monitor button */
         .monitor-btn { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; color:#1f2937; font-weight:600; }
         .monitor-btn.enabled { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
         .monitor-btn i { font-size:14px; }
 
-        /* Toast notification */
         .toast-container { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
         .toast { background:#111827; color:#fff; padding:10px 14px; border-radius:10px; box-shadow: 0 6px 20px rgba(0,0,0,.2); font-weight:600; display:flex; align-items:center; gap:10px; }
         .toast .count { background:#fef3c7; color:#92400e; border-radius:999px; padding:2px 8px; font-weight:800; }
 
-        /* Hide center nav tabs if present in HTML */
+        .tabs .tab-btn { background:none; border:none; padding:10px 12px; font-weight:700; color:#6b7280; cursor:pointer; }
+        .tabs .tab-btn.active { color:#1d4ed8; border-bottom:2px solid #1d4ed8; }
+
         .nav-tabs { display:none !important; }
         `;
         const style = document.createElement('style');
@@ -118,21 +122,36 @@ class SubdomainDashboard {
         this.errorMessage = document.getElementById('errorMessage');
         this.retryBtn = document.getElementById('retryBtn');
 
-        // Add Monitor toggle to controls
+        // Monitor button in results controls
         const controls = document.querySelector('.results-controls .filter-controls');
         this.monitorToggleBtn = document.createElement('button');
         this.monitorToggleBtn.className = 'monitor-btn';
         this.monitorToggleBtn.id = 'monitorToggleBtn';
-        this.monitorToggleBtn.innerHTML = '<i class="fas fa-bell"></i><span>Enable Monitoring</span>';
+        this.monitorToggleBtn.innerHTML = '<i class="fas fa-bell-slash"></i><span>Enable Monitoring</span>';
         controls.insertBefore(this.monitorToggleBtn, controls.firstChild);
 
         // Left navigation
         this.leftScannerLink = document.getElementById('leftScannerLink');
         this.leftDashboardLink = document.getElementById('leftDashboardLink');
+        this.assetsList = document.getElementById('assetsList');
 
         // Views
         this.scannerView = document.getElementById('scannerView');
         this.dashboardView = document.getElementById('dashboardView');
+        this.assetDetailView = document.getElementById('assetDetailView');
+
+        // Asset view elements
+        this.assetBackBtn = document.getElementById('assetBackBtn');
+        this.assetName = document.getElementById('assetName');
+        this.assetRelatedDomain = document.getElementById('assetRelatedDomain');
+        this.assetCreatedOn = document.getElementById('assetCreatedOn');
+        this.assetExportBtn = document.getElementById('assetExportBtn');
+        this.assetMonitorBtn = document.getElementById('assetMonitorBtn');
+        this.tabs = document.querySelectorAll('.tab-btn');
+        this.assetTechTab = document.getElementById('assetTechTab');
+        this.assetHistoryTab = document.getElementById('assetHistoryTab');
+        this.techTableBody = document.getElementById('technologiesTableBody');
+        this.assetHistoryList = document.getElementById('assetHistoryList');
 
         // Dashboard elements
         this.totalDomains = document.getElementById('totalDomains');
@@ -153,19 +172,23 @@ class SubdomainDashboard {
     bindEvents() {
         // Scanner events
         this.searchBtn.addEventListener('click', () => this.searchSubdomains());
-        this.domainInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.searchSubdomains();
-        });
+        this.domainInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.searchSubdomains(); });
         this.filterInput.addEventListener('input', () => this.filterSubdomains());
         this.exportBtn.addEventListener('click', () => this.exportSubdomains());
         this.retryBtn.addEventListener('click', () => this.searchSubdomains());
 
-        // Monitor toggle
+        // Monitor toggle on Scanner
         this.monitorToggleBtn.addEventListener('click', () => this.toggleMonitoring());
 
-        // Left navigation switching
-        if (this.leftScannerLink) this.leftScannerLink.addEventListener('click', () => this.switchView('scanner'));
-        if (this.leftDashboardLink) this.leftDashboardLink.addEventListener('click', () => this.switchView('dashboard'));
+        // Left navigation
+        this.leftScannerLink.addEventListener('click', () => this.switchView('scanner'));
+        this.leftDashboardLink.addEventListener('click', () => this.switchView('dashboard'));
+
+        // Asset view navigation and tabs
+        this.assetBackBtn.addEventListener('click', () => this.switchView('scanner'));
+        this.assetExportBtn.addEventListener('click', () => this.exportAssetTechnologies());
+        this.assetMonitorBtn.addEventListener('click', () => this.toggleAssetMonitoring());
+        this.tabs.forEach(btn => btn.addEventListener('click', (e) => this.switchAssetTab(e.target.dataset.tab)));
 
         // Dashboard events
         this.clearHistoryBtn.addEventListener('click', () => this.clearHistory());
@@ -183,17 +206,14 @@ class SubdomainDashboard {
             };
         } catch (error) {
             console.error('Error loading stored data:', error);
-            this.scanData = {
-                domains: {},
-                totalScans: 0,
-                lastScan: null
-            };
+            this.scanData = { domains: {}, totalScans: 0, lastScan: null };
         }
     }
 
     saveData() {
         try {
             localStorage.setItem(this.storageKey, JSON.stringify(this.scanData));
+            this.updateAssetsSidebar();
         } catch (error) {
             console.error('Error saving data:', error);
         }
@@ -231,15 +251,61 @@ class SubdomainDashboard {
         this.updateScanHistory();
     }
 
+    // Sidebar assets
+    updateAssetsSidebar() {
+        if (!this.assetsList) return;
+        const domains = Object.keys(this.scanData.domains || {}).sort();
+        if (domains.length === 0) {
+            this.assetsList.innerHTML = '';
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        this.assetsList.innerHTML = '';
+
+        domains.forEach(d => {
+            const det = document.createElement('details');
+            det.className = 'asset-node';
+            det.open = false;
+            const sum = document.createElement('summary');
+            sum.innerHTML = `<i class="fas fa-globe"></i><span>${d}</span>`;
+            sum.addEventListener('click', (e) => {
+                // single click opens asset (not just toggle)
+                e.preventDefault();
+                this.openAsset(d);
+            });
+            det.appendChild(sum);
+            const children = document.createElement('div');
+            children.className = 'asset-children';
+            const openLink = document.createElement('a');
+            openLink.href = 'javascript:void(0)';
+            openLink.className = 'asset-link';
+            openLink.textContent = 'Open';
+            openLink.addEventListener('click', () => this.openAsset(d));
+            const histLink = document.createElement('a');
+            histLink.href = 'javascript:void(0)';
+            histLink.className = 'asset-link';
+            histLink.textContent = 'Scan history';
+            histLink.addEventListener('click', () => this.openAsset(d, 'history'));
+            children.appendChild(openLink);
+            children.appendChild(histLink);
+            det.appendChild(children);
+            frag.appendChild(det);
+        });
+        this.assetsList.appendChild(frag);
+    }
+
     // View Management
     switchView(view) {
         this.currentView = view;
 
-        if (this.leftScannerLink) this.leftScannerLink.classList.toggle('active', view === 'scanner');
-        if (this.leftDashboardLink) this.leftDashboardLink.classList.toggle('active', view === 'dashboard');
+        // Left nav active states (for scanner/dashboard)
+        this.leftScannerLink.classList.toggle('active', view === 'scanner');
+        this.leftDashboardLink.classList.toggle('active', view === 'dashboard');
 
-        this.scannerView.classList.toggle('active', view === 'scanner');
-        this.dashboardView.classList.toggle('active', view === 'dashboard');
+        // Show/hide main views
+        this.scannerView.style.display = view === 'scanner' ? '' : 'none';
+        this.dashboardView.style.display = view === 'dashboard' ? '' : 'none';
+        this.assetDetailView.style.display = view === 'asset' ? '' : 'none';
 
         if (view === 'dashboard') {
             this.updateDashboardStats();
@@ -248,17 +314,11 @@ class SubdomainDashboard {
         }
     }
 
-    // Scanner Functionality
+    // Scanner Flow
     async searchSubdomains() {
         const domain = this.domainInput.value.trim().toLowerCase();
-        if (!domain) {
-            this.showError('Please enter a domain name');
-            return;
-        }
-        if (!this.isValidDomain(domain)) {
-            this.showError('Please enter a valid domain name (e.g., example.com)');
-            return;
-        }
+        if (!domain) { this.showError('Please enter a domain name'); return; }
+        if (!this.isValidDomain(domain)) { this.showError('Please enter a valid domain name (e.g., example.com)'); return; }
 
         this.currentDomain = domain;
         this.showLoading();
@@ -266,7 +326,6 @@ class SubdomainDashboard {
         this.hideResults();
 
         try {
-            // Fetch from all sources in parallel
             const [crtRes, wbRes, sfRes, monitorRes] = await Promise.allSettled([
                 this.fetchSubdomainsFromCrtSh(domain),
                 this.fetchSubdomainsFromWayback(domain),
@@ -279,31 +338,24 @@ class SubdomainDashboard {
             const sfList = sfRes.status === 'fulfilled' ? sfRes.value : [];
             this.monitorStatus = monitorRes.status === 'fulfilled' ? monitorRes.value : null;
 
-            // Merge and deduplicate
-            const merged = new Set([...crtList, ...wbList, ...sfList]);
-            const finalSubdomains = Array.from(merged).sort();
-            if (finalSubdomains.length === 0) {
-                throw new Error('No subdomains found from crt.sh, Wayback, or Subfinder');
-            }
+            const finalSubdomains = Array.from(new Set([...crtList, ...wbList, ...sfList])).sort();
+            if (finalSubdomains.length === 0) throw new Error('No subdomains found from crt.sh, Wayback, or Subfinder');
 
-            // Draw the table
             this.displayResults(finalSubdomains);
 
-            // Highlight "new" vs last monitor baseline (if any)
+            // Highlight new vs monitor baseline (if any)
             const prev = new Set((this.monitorStatus && this.monitorStatus.last_results) || []);
             const newOnes = finalSubdomains.filter(s => !prev.has(s));
-            if (newOnes.length > 0) {
-                this.highlightNewSubdomains(newOnes);
-            }
+            if (newOnes.length > 0) this.highlightNewSubdomains(newOnes);
 
-            // Enrich with metadata
+            // Enrich
             this.currentMetadata = {};
             await this.enrichSubdomainsWithMetadata(finalSubdomains);
 
-            // Save scan locally for dashboard
+            // Save scan
             this.saveScanResult(domain, finalSubdomains, this.currentMetadata);
 
-            // Update monitor toggle UI state
+            // Update monitor toggle UI
             this.refreshMonitorToggleUI();
         } catch (error) {
             console.error('Error fetching subdomains:', error);
@@ -320,12 +372,10 @@ class SubdomainDashboard {
 
     refreshMonitorToggleUI() {
         const enabled = !!(this.monitorStatus && this.monitorStatus.enabled);
-        const label = this.monitorToggleBtn.querySelector('span');
         this.monitorToggleBtn.classList.toggle('enabled', enabled);
         this.monitorToggleBtn.innerHTML = enabled
             ? '<i class="fas fa-bell"></i><span>Monitoring Enabled</span>'
             : '<i class="fas fa-bell-slash"></i><span>Enable Monitoring</span>';
-        if (label) label.textContent = enabled ? 'Monitoring Enabled' : 'Enable Monitoring';
     }
 
     async toggleMonitoring() {
@@ -335,20 +385,13 @@ class SubdomainDashboard {
             const resp = await fetch(this.monitorApiBase, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({
-                    domain: this.currentDomain,
-                    enabled: newState,
-                    interval_hours: 12
-                })
+                body: JSON.stringify({ domain: this.currentDomain, enabled: newState, interval_hours: 12 })
             });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             this.monitorStatus = await resp.json();
             this.refreshMonitorToggleUI();
-            this.toast(newState
-                ? `Monitoring enabled for ${this.currentDomain}`
-                : `Monitoring disabled for ${this.currentDomain}`);
+            this.toast(newState ? `Monitoring enabled for ${this.currentDomain}` : `Monitoring disabled for ${this.currentDomain}`);
         } catch (e) {
-            console.warn('Toggle monitoring failed:', e);
             this.toast('Failed to update monitoring', true);
         }
     }
@@ -360,24 +403,17 @@ class SubdomainDashboard {
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             if (!Array.isArray(data)) throw new Error('Invalid response format from crt.sh');
-
-            const subdomains = new Set();
+            const set = new Set();
             data.forEach(cert => {
                 if (cert.name_value) {
-                    const names = cert.name_value.split('\n');
-                    names.forEach(name => {
-                        const cleanName = name.trim().toLowerCase();
-                        if (cleanName.endsWith(`.${domain}`) || cleanName === domain) {
-                            subdomains.add(cleanName);
-                        }
+                    cert.name_value.split('\n').forEach(name => {
+                        const n = name.trim().toLowerCase();
+                        if (n.endsWith(`.${domain}`) || n === domain) set.add(n);
                     });
                 }
             });
-            return Array.from(subdomains).sort();
-        } catch (error) {
-            console.warn('CRT fetch failed:', error);
-            return [];
-        }
+            return Array.from(set).sort();
+        } catch (e) { return []; }
     }
 
     async fetchSubdomainsFromWayback(domain) {
@@ -387,15 +423,9 @@ class SubdomainDashboard {
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             if (!Array.isArray(data)) throw new Error('Invalid response format from Wayback');
-            const normalized = data
-                .filter(Boolean)
-                .map(s => String(s).trim().toLowerCase())
-                .filter(s => s.endsWith(`.${domain}`) || s === domain);
-            return Array.from(new Set(normalized)).sort();
-        } catch (error) {
-            console.warn('Wayback fetch failed:', error);
-            return [];
-        }
+            const n = data.filter(Boolean).map(s => String(s).trim().toLowerCase());
+            return Array.from(new Set(n.filter(s => s.endsWith(`.${domain}`) || s === domain))).sort();
+        } catch (e) { return []; }
     }
 
     async fetchSubdomainsFromSubfinder(domain) {
@@ -405,15 +435,9 @@ class SubdomainDashboard {
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             if (!Array.isArray(data)) throw new Error('Invalid response format from Subfinder');
-            const normalized = data
-                .filter(Boolean)
-                .map(s => String(s).trim().toLowerCase())
-                .filter(s => s.endsWith(`.${domain}`) || s === domain);
-            return Array.from(new Set(normalized)).sort();
-        } catch (error) {
-            console.warn('Subfinder fetch failed:', error);
-            return [];
-        }
+            const n = data.filter(Boolean).map(s => String(s).trim().toLowerCase());
+            return Array.from(new Set(n.filter(s => s.endsWith(`.${domain}`) || s === domain))).sort();
+        } catch (e) { return []; }
     }
 
     async enrichSubdomainsWithMetadata(subdomains) {
@@ -428,9 +452,7 @@ class SubdomainDashboard {
                     this.currentMetadata[host] = res;
                     this.updateSubdomainItemUI(host, res);
                 });
-            } catch (e) {
-                console.warn('Metadata batch failed:', e);
-            }
+            } catch { /* ignore batch errors */ }
         }
     }
 
@@ -453,20 +475,6 @@ class SubdomainDashboard {
         this.subdomainCount.textContent = subdomains.length;
 
         this.subdomainsTableBody.innerHTML = '';
-
-        if (subdomains.length === 0) {
-            this.subdomainsTableBody.innerHTML = `
-                <tr><td colspan="6">
-                    <div class="no-results">
-                        <i class="fas fa-search"></i>
-                        <h3>No subdomains found</h3>
-                        <p>No subdomains were found for <strong>${this.currentDomain}</strong> in sources.</p>
-                    </div>
-                </td></tr>
-            `;
-            return;
-        }
-
         const frag = document.createDocumentFragment();
         subdomains.forEach(sd => frag.appendChild(this.createSubdomainRow(sd)));
         this.subdomainsTableBody.appendChild(frag);
@@ -504,10 +512,7 @@ class SubdomainDashboard {
                 </a>
             </td>
         `;
-
-        const copyBtn = tr.querySelector('.copy-btn');
-        copyBtn.addEventListener('click', () => navigator.clipboard.writeText(subdomain));
-
+        tr.querySelector('.copy-btn').addEventListener('click', () => navigator.clipboard.writeText(subdomain));
         return tr;
     }
 
@@ -530,32 +535,17 @@ class SubdomainDashboard {
         const checkedAt = meta?.checked_at || '';
         const error = meta?.error || '';
 
-        // Reset classes
         badge.classList.remove('status-up', 'status-warn', 'status-down', 'status-unknown');
 
         let cls = 'status-unknown';
         let label = 'No Response';
         let display = 'No Response';
-        if (status === null) {
-            cls = 'status-unknown';
-            display = 'No Response';
-        } else if (status >= 200 && status < 300) {
-            cls = 'status-up';
-            label = 'OK';
-            display = `${status} ${label}`;
-        } else if (status >= 300 && status < 400) {
-            cls = 'status-up';
-            label = 'Redirect';
-            display = `${status} ${label}`;
-        } else if (status >= 400 && status < 500) {
-            cls = 'status-warn';
-            label = 'Client Error';
-            display = `${status} ${label}`;
-        } else {
-            cls = 'status-down';
-            label = 'Server Error';
-            display = `${status} ${label}`;
-        }
+        if (status === null) { cls = 'status-unknown'; display = 'No Response'; }
+        else if (status >= 200 && status < 300) { cls = 'status-up'; label = 'OK'; display = `${status} ${label}`; }
+        else if (status >= 300 && status < 400) { cls = 'status-up'; label = 'Redirect'; display = `${status} ${label}`; }
+        else if (status >= 400 && status < 500) { cls = 'status-warn'; label = 'Client Error'; display = `${status} ${label}`; }
+        else { cls = 'status-down'; label = 'Server Error'; display = `${status} ${label}`; }
+
         badge.classList.add(cls);
         statusText.textContent = display;
 
@@ -571,8 +561,6 @@ class SubdomainDashboard {
             error ? `Error: ${error}` : ''
         ].filter(Boolean).join('\n');
         badge.title = tooltip;
-
-        // Update open link to correct scheme if available
         const openLink = row.querySelector('.visit-btn');
         if (openLink && meta?.scheme) openLink.href = `${meta.scheme}://${subdomain}`;
     }
@@ -583,20 +571,14 @@ class SubdomainDashboard {
         this.subdomainsTableBody.querySelectorAll('.subdomain-row').forEach(row => {
             const sub = row.dataset.subdomain.toLowerCase();
             const chip = row.querySelector('[data-role="new-chip"]');
-            if (set.has(sub)) {
-                row.classList.add('row-new');
-                if (chip) chip.style.display = 'inline-block';
-            } else {
-                row.classList.remove('row-new');
-                if (chip) chip.style.display = 'none';
-            }
+            if (set.has(sub)) { row.classList.add('row-new'); if (chip) chip.style.display = 'inline-block'; }
+            else { row.classList.remove('row-new'); if (chip) chip.style.display = 'none'; }
         });
     }
 
     filterSubdomains() {
         const filter = this.filterInput.value.toLowerCase();
         const rows = this.subdomainsTableBody.querySelectorAll('.subdomain-row');
-
         rows.forEach(row => {
             const sub = row.dataset.subdomain.toLowerCase();
             const status = (row.querySelector('[data-role="status-text"]')?.textContent || '').toLowerCase();
@@ -604,7 +586,6 @@ class SubdomainDashboard {
             const visible = sub.includes(filter) || status.includes(filter) || title.includes(filter);
             row.style.display = visible ? '' : 'none';
         });
-
         const visibleCount = Array.from(rows).filter(r => r.style.display !== 'none').length;
         this.subdomainCount.textContent = visibleCount;
     }
@@ -623,7 +604,187 @@ class SubdomainDashboard {
         URL.revokeObjectURL(url);
     }
 
-    // Dashboard Functionality (unchanged core)
+    // Asset Detail
+    async openAsset(domain, initialTab = 'tech') {
+        this.assetDomain = domain;
+        this.switchView('asset');
+
+        // Header info
+        this.assetName.textContent = domain;
+        const domainData = this.scanData.domains[domain];
+        const createdOn = domainData?.firstScan ? new Date(domainData.firstScan) : null;
+        this.assetCreatedOn.querySelector('span:last-child').textContent = `Created on ${createdOn ? createdOn.toLocaleDateString() : '—'}`;
+
+        // Monitoring button mirrors scanner monitor for this domain
+        try {
+            this.monitorStatus = await this.fetchMonitorStatus(domain);
+        } catch { this.monitorStatus = null; }
+        this.refreshAssetMonitorToggleUI();
+
+        // Tabs
+        this.switchAssetTab(initialTab);
+
+        // Build Technologies from latest scan metadata (aggregated)
+        if (domainData && domainData.scans.length > 0) {
+            const latest = domainData.scans[domainData.scans.length - 1];
+            const techAgg = this.aggregateTechnologies(latest.metadata || {});
+            this.renderTechnologiesTable(techAgg);
+            this.renderAssetHistory(domain);
+            // Availability (Up if >50% of last scan metadata returned 2xx-3xx)
+            const statuses = Object.values(latest.metadata || {}).map(m => m?.status_code).filter(s => typeof s === 'number');
+            const up = statuses.filter(s => s >= 200 && s < 400).length;
+            const avail = statuses.length > 0 ? (up / statuses.length) : 0;
+            const badge = this.assetRelatedDomain;
+            badge.classList.remove('status-up','status-warn','status-down','status-unknown');
+            if (avail >= 0.5) { badge.classList.add('status-up'); badge.querySelector('span:last-child').textContent = 'Availability • Up'; }
+            else if (statuses.length === 0) { badge.classList.add('status-unknown'); badge.querySelector('span:last-child').textContent = 'Availability • Unknown'; }
+            else { badge.classList.add('status-warn'); badge.querySelector('span:last-child').textContent = 'Availability • Limited'; }
+        } else {
+            this.renderTechnologiesTable([]);
+            this.assetHistoryList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-search"></i>
+                    <h4>No scans yet</h4>
+                    <p>Run a scan from the Scanner to populate history</p>
+                </div>`;
+        }
+    }
+
+    switchAssetTab(tab) {
+        this.tabs.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+        this.assetTechTab.style.display = tab === 'tech' ? '' : 'none';
+        this.assetHistoryTab.style.display = tab === 'history' ? '' : 'none';
+    }
+
+    refreshAssetMonitorToggleUI() {
+        const enabled = !!(this.monitorStatus && this.monitorStatus.enabled);
+        this.assetMonitorBtn.classList.toggle('enabled', enabled);
+        this.assetMonitorBtn.innerHTML = enabled
+            ? '<i class="fas fa-bell"></i><span>Monitoring Enabled</span>'
+            : '<i class="fas fa-bell-slash"></i><span>Enable Monitoring</span>';
+    }
+
+    async toggleAssetMonitoring() {
+        if (!this.assetDomain) return;
+        const newState = !(this.monitorStatus && this.monitorStatus.enabled);
+        try {
+            const resp = await fetch(this.monitorApiBase, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ domain: this.assetDomain, enabled: newState, interval_hours: 12 })
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            this.monitorStatus = await resp.json();
+            this.refreshAssetMonitorToggleUI();
+            this.toast(newState ? `Monitoring enabled for ${this.assetDomain}` : `Monitoring disabled for ${this.assetDomain}`);
+        } catch {
+            this.toast('Failed to update monitoring', true);
+        }
+    }
+
+    aggregateTechnologies(metadataMap) {
+        const agg = {}; // key: vendor|product|version
+        Object.entries(metadataMap || {}).forEach(([host, meta]) => {
+            (meta.technologies || []).forEach(t => {
+                const key = `${t.vendor}|${t.product}|${t.version||''}`;
+                if (!agg[key]) {
+                    agg[key] = { vendor: t.vendor, product: t.product, version: t.version || '', hosts: new Set(), last_seen: new Date() };
+                }
+                agg[key].hosts.add(host);
+            });
+        });
+        return Object.values(agg).map(x => ({
+            vendor: x.vendor,
+            product: x.product,
+            version: x.version,
+            hosts: Array.from(x.hosts).sort(),
+            last_seen: new Date().toISOString()
+        })).sort((a,b) => (a.vendor+a.product).localeCompare(b.vendor+b.product));
+    }
+
+    renderTechnologiesTable(techList) {
+        if (!techList || techList.length === 0) {
+            this.techTableBody.innerHTML = `<tr><td colspan="6">No technologies detected yet.</td></tr>`;
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        this.techTableBody.innerHTML = '';
+        techList.forEach(t => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${t.vendor || '—'}</td>
+                <td>${t.product || '—'}</td>
+                <td>${t.version || '—'}</td>
+                <td>${t.hosts.length}</td>
+                <td>${new Date(t.last_seen).toLocaleDateString()}</td>
+                <td>—</td>
+            `;
+            frag.appendChild(tr);
+        });
+        this.techTableBody.appendChild(frag);
+    }
+
+    renderAssetHistory(domain) {
+        const domainData = this.scanData.domains[domain];
+        const scans = (domainData?.scans || []).slice().sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+        if (scans.length === 0) {
+            this.assetHistoryList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-search"></i>
+                    <h4>No scans yet</h4>
+                    <p>Run a scan from the Scanner to populate history</p>
+                </div>`;
+            return;
+        }
+        this.assetHistoryList.innerHTML = '';
+        scans.forEach(scan => {
+            const el = document.createElement('div');
+            el.className = 'history-item';
+            el.dataset.domain = domain;
+            el.dataset.scanId = scan.id;
+            const dt = new Date(scan.timestamp);
+            el.innerHTML = `
+                <div class="history-header">
+                    <span class="history-domain">${domain}</span>
+                    <span class="history-date">${this.formatDate(dt)}</span>
+                </div>
+                <div class="history-stats">
+                    <div class="history-stat"><i class="fas fa-sitemap"></i><span>${scan.count} subdomains</span></div>
+                    <div class="history-stat"><i class="fas fa-clock"></i><span>${this.formatRelativeTime(dt)}</span></div>
+                </div>
+                <div class="history-actions">
+                    <button class="history-action"><i class="fas fa-eye"></i> View</button>
+                    <button class="history-action"><i class="fas fa-download"></i> Export</button>
+                </div>
+            `;
+            const [viewBtn, exportBtn] = el.querySelectorAll('.history-action');
+            viewBtn.addEventListener('click', () => this.viewScanDetails(domain, scan.id));
+            exportBtn.addEventListener('click', () => this.exportScanData(domain, scan.id));
+            this.assetHistoryList.appendChild(el);
+        });
+    }
+
+    exportAssetTechnologies() {
+        const rows = Array.from(this.techTableBody.querySelectorAll('tr'));
+        if (rows.length === 0) return;
+        const headers = ['Vendor','Product','Version','Hosts','Last seen'];
+        const data = [headers.join(',')];
+        rows.forEach(r => {
+            const cols = Array.from(r.querySelectorAll('td')).slice(0,5).map(td => `"${(td.textContent||'').replace(/"/g,'""')}"`);
+            if (cols.length === 5) data.push(cols.join(','));
+        });
+        const blob = new Blob([data.join('\n')], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `technologies_${this.assetDomain}_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // Dashboard Functionality
     updateDashboardStats() {
         const domainCount = Object.keys(this.scanData.domains).length;
         const totalSubdomains = Object.values(this.scanData.domains)
@@ -645,9 +806,7 @@ class SubdomainDashboard {
         const historyContainer = this.scanHistoryList;
         const allScans = [];
         Object.entries(this.scanData.domains).forEach(([domain, domainData]) => {
-            domainData.scans.forEach(scan => {
-                allScans.push({ domain, ...scan, domainData });
-            });
+            domainData.scans.forEach(scan => allScans.push({ domain, ...scan, domainData }));
         });
         allScans.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         if (allScans.length === 0) {
@@ -656,8 +815,7 @@ class SubdomainDashboard {
                     <i class="fas fa-search"></i>
                     <h4>No scans yet</h4>
                     <p>Start by scanning your first domain using the Scanner tab</p>
-                </div>
-            `;
+                </div>`;
             return;
         }
         historyContainer.innerHTML = '';
@@ -672,7 +830,6 @@ class SubdomainDashboard {
         element.className = 'history-item';
         element.dataset.domain = scan.domain;
         element.dataset.scanId = scan.id;
-
         const scanDate = new Date(scan.timestamp);
         element.innerHTML = `
             <div class="history-header">
@@ -680,32 +837,14 @@ class SubdomainDashboard {
                 <span class="history-date">${this.formatDate(scanDate)}</span>
             </div>
             <div class="history-stats">
-                <div class="history-stat">
-                    <i class="fas fa-sitemap"></i>
-                    <span>${scan.count} subdomains</span>
-                </div>
-                <div class="history-stat">
-                    <i class="fas fa-clock"></i>
-                    <span>${this.formatRelativeTime(scanDate)}</span>
-                </div>
-                <div class="history-stat">
-                    <i class="fas fa-history"></i>
-                    <span>${scan.domainData.scans.length} total scans</span>
-                </div>
+                <div class="history-stat"><i class="fas fa-sitemap"></i><span>${scan.count} subdomains</span></div>
+                <div class="history-stat"><i class="fas fa-clock"></i><span>${this.formatRelativeTime(scanDate)}</span></div>
+                <div class="history-stat"><i class="fas fa-history"></i><span>${scan.domainData.scans.length} total scans</span></div>
             </div>
             <div class="history-actions">
-                <button class="history-action" onclick="subdomainDashboard.viewScanDetails('${scan.domain}', '${scan.id}')">
-                    <i class="fas fa-eye"></i>
-                    View Details
-                </button>
-                <button class="history-action" onclick="subdomainDashboard.exportScanData('${scan.domain}', '${scan.id}')">
-                    <i class="fas fa-download"></i>
-                    Export
-                </button>
-                <button class="history-action" onclick="subdomainDashboard.rescanDomain('${scan.domain}')">
-                    <i class="fas fa-redo"></i>
-                    Rescan
-                </button>
+                <button class="history-action" onclick="subdomainDashboard.viewScanDetails('${scan.domain}', '${scan.id}')"><i class="fas fa-eye"></i> View</button>
+                <button class="history-action" onclick="subdomainDashboard.exportScanData('${scan.domain}', '${scan.id}')"><i class="fas fa-download"></i> Export</button>
+                <button class="history-action" onclick="subdomainDashboard.rescanDomain('${scan.domain}')"><i class="fas fa-redo"></i> Rescan</button>
             </div>
         `;
         return element;
@@ -714,15 +853,13 @@ class SubdomainDashboard {
     updateDomainAnalytics() {
         const analyticsContainer = this.domainAnalytics;
         const domains = Object.keys(this.scanData.domains);
-
         if (domains.length === 0) {
             analyticsContainer.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-chart-line"></i>
                     <h4>No data available</h4>
                     <p>Analytics will appear here after you scan some domains</p>
-                </div>
-            `;
+                </div>`;
             return;
         }
 
@@ -771,11 +908,10 @@ class SubdomainDashboard {
                         </div>
                     `).join('')}
                 </div>
-            </div>
-        `;
+            </div>`;
     }
 
-    // Dashboard Actions
+    // Dashboard Actions (and reused elsewhere)
     async viewScanDetails(domain, scanId) {
         const domainData = this.scanData.domains[domain];
         if (!domainData) return;
@@ -790,15 +926,6 @@ class SubdomainDashboard {
         this.currentMetadata = scan.metadata || {};
         this.displayResults(scan.subdomains);
         this.applyMetadataToUI(this.currentMetadata);
-
-        // Fetch monitor status and highlight diff vs last baseline
-        try {
-            this.monitorStatus = await this.fetchMonitorStatus(domain);
-            const prev = new Set((this.monitorStatus && this.monitorStatus.last_results) || []);
-            const newOnes = scan.subdomains.filter(s => !prev.has(s));
-            if (newOnes.length > 0) this.highlightNewSubdomains(newOnes);
-            this.refreshMonitorToggleUI();
-        } catch {}
     }
 
     exportScanData(domain, scanId) {
@@ -832,15 +959,13 @@ class SubdomainDashboard {
             this.saveData();
             this.updateDashboardStats();
             this.updateScanHistory();
+            this.updateAssetsSidebar();
             this.updateDomainAnalytics();
         }
     }
 
     exportAllData() {
-        if (Object.keys(this.scanData.domains).length === 0) {
-            alert('No data to export');
-            return;
-        }
+        if (Object.keys(this.scanData.domains).length === 0) { alert('No data to export'); return; }
         const exportData = {
             exportDate: new Date().toISOString(),
             summary: {
@@ -850,7 +975,6 @@ class SubdomainDashboard {
             },
             domains: this.scanData.domains
         };
-
         const content = JSON.stringify(exportData, null, 2);
         const blob = new Blob([content], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -863,23 +987,18 @@ class SubdomainDashboard {
         URL.revokeObjectURL(url);
     }
 
-    // Polling for monitor updates every 30s
+    // Poll monitor updates every 30s
     startUpdatesPolling() {
         setInterval(async () => {
             try {
                 let url = this.monitorUpdatesApi;
-                if (this.lastEventsTs) {
-                    url += `?since=${encodeURIComponent(this.lastEventsTs)}`;
-                }
+                if (this.lastEventsTs) url += `?since=${encodeURIComponent(this.lastEventsTs)}`;
                 const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
                 if (!resp.ok) return;
                 const data = await resp.json();
                 this.lastEventsTs = data.server_time;
-                const events = data.events || [];
-                events.forEach(evt => this.handleMonitorEvent(evt));
-            } catch (e) {
-                // ignore transient errors
-            }
+                (data.events || []).forEach(evt => this.handleMonitorEvent(evt));
+            } catch { /* ignore */ }
         }, 30000);
     }
 
@@ -888,26 +1007,22 @@ class SubdomainDashboard {
         const domain = evt.domain;
         const count = evt.count || 0;
         const list = evt.new_subdomains || [];
-
         this.toast(`${count} new assets found for ${domain}`, false, count);
-
-        // If user is currently viewing same domain, reflect highlight
-        if (domain === this.currentDomain && this.currentView === 'scanner') {
-            this.highlightNewSubdomains(list);
+        if (domain === this.currentDomain && this.currentView === 'scanner') this.highlightNewSubdomains(list);
+        // If user is on asset view for the same domain, update scan history marker
+        if (domain === this.assetDomain && this.currentView === 'asset') {
+            this.renderAssetHistory(domain);
         }
     }
 
-    // Utility Functions
+    // Utility
     isValidDomain(domain) {
         const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.([a-zA-Z]{2,}|[a-zA-Z]{2,}\.[a-zA-Z]{2,})$/;
         return domainRegex.test(domain);
     }
-    formatDate(date) {
-        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-    }
+    formatDate(date) { return date.toLocaleDateString() + ' ' + date.toLocaleTimeString(); }
     formatRelativeTime(date) {
-        const now = new Date();
-        const diff = now - date;
+        const now = new Date(); const diff = now - date;
         const minutes = Math.floor(diff / (1000 * 60));
         const hours = Math.floor(diff / (1000 * 60 * 60));
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -918,29 +1033,13 @@ class SubdomainDashboard {
         return date.toLocaleDateString();
     }
 
-    // UI State
-    showLoading() {
-        this.loadingSection.classList.remove('hidden');
-        this.searchBtn.disabled = true;
-        this.searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Enumerating...</span>';
-    }
-    hideLoading() {
-        this.loadingSection.classList.add('hidden');
-        this.searchBtn.disabled = false;
-        this.searchBtn.innerHTML = '<i class="fas fa-search"></i><span>Enumerate</span>';
-    }
+    showLoading() { this.loadingSection.classList.remove('hidden'); this.searchBtn.disabled = true; this.searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Enumerating...</span>'; }
+    hideLoading() { this.loadingSection.classList.add('hidden'); this.searchBtn.disabled = false; this.searchBtn.innerHTML = '<i class="fas fa-search"></i><span>Enumerate</span>'; }
     showResults() { this.resultsSection.classList.remove('hidden'); }
     hideResults() { this.resultsSection.classList.add('hidden'); }
-    showError(message) {
-        this.errorMessage.textContent = message;
-        this.errorSection.classList.remove('hidden');
-        this.hideLoading();
-    }
+    showError(message) { this.errorMessage.textContent = message; this.errorSection.classList.remove('hidden'); this.hideLoading(); }
     hideError() { this.errorSection.classList.add('hidden'); }
-    applyMetadataToUI(metadataMap) {
-        Object.entries(metadataMap || {}).forEach(([host, meta]) => this.updateSubdomainItemUI(host, meta));
-    }
-
+    applyMetadataToUI(metadataMap) { Object.entries(metadataMap || {}).forEach(([host, meta]) => this.updateSubdomainItemUI(host, meta)); }
     toast(message, isError = false, count = null) {
         const t = document.createElement('div');
         t.className = 'toast';
@@ -953,7 +1052,6 @@ class SubdomainDashboard {
 // Global instance
 let subdomainDashboard;
 
-// Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     subdomainDashboard = new SubdomainDashboard();
 });
