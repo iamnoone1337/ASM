@@ -8,11 +8,55 @@ class SubdomainDashboard {
 
         // Configure API endpoints based on environment
         this.configureApiEndpoints();
+
+        // Inject CSS for status badges without altering existing styles.css
+        this.injectStatusStyles();
         
         this.initializeElements();
         this.bindEvents();
         this.loadStoredData();
         this.updateDashboardStats();
+    }
+
+    injectStatusStyles() {
+        const css = `
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            letter-spacing: .2px;
+            background: #e2e8f0;
+            color: #2d3748;
+            border: 1px solid #cbd5e0;
+            white-space: nowrap;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #a0aec0;
+        }
+        .status-up { background: #e6fffa; color: #276749; border-color: #9ae6b4; }
+        .status-up .status-dot { background: #38a169; }
+        .status-warn { background: #fffaf0; color: #975a16; border-color: #f6ad55; }
+        .status-warn .status-dot { background: #dd6b20; }
+        .status-down { background: #fff5f5; color: #9b2c2c; border-color: #fc8181; }
+        .status-down .status-dot { background: #e53e3e; }
+        .status-unknown { background: #edf2f7; color: #4a5568; border-color: #cbd5e0; }
+        .status-unknown .status-dot { background: #a0aec0; }
+        .subdomain-title { color: #718096; margin-left: 6px; }
+        .meta-extra { color: #718096; font-size: 0.8rem; margin-left: 8px; }
+        .status-legend { display:flex; gap:8px; flex-wrap:wrap; }
+        .status-legend .status-badge { cursor: default; }
+        `;
+        const style = document.createElement('style');
+        style.setAttribute('data-injected', 'status-styles');
+        style.textContent = css;
+        document.head.appendChild(style);
     }
 
     configureApiEndpoints() {
@@ -21,21 +65,13 @@ class SubdomainDashboard {
         let apiBase;
         
         if (apiBaseMetaTag && apiBaseMetaTag.content) {
-            // Use custom API base URL from meta tag
-            apiBase = apiBaseMetaTag.content.replace(/\/$/, ''); // Remove trailing slash
-            console.log('Using custom API base from meta tag:', apiBase);
+            apiBase = apiBaseMetaTag.content.replace(/\/$/, '');
         } else {
-            // Use same-origin relative API endpoints by default
             apiBase = `${window.location.origin}/api`;
-            console.log('Using same-origin API base:', apiBase);
         }
         
         this.crtApiBase = `${apiBase}/crt`;
         this.metaApiBase = `${apiBase}/meta`;
-        console.log('Configured API endpoints:', {
-            crt: this.crtApiBase,
-            meta: this.metaApiBase
-        });
     }
 
     initializeElements() {
@@ -341,7 +377,11 @@ class SubdomainDashboard {
                     <span class="subdomain-type ${subdomainType}">${isMainDomain ? 'Main Domain' : 'Subdomain'}</span>
                 </div>
                 <div class="subdomain-meta">
-                    <span class="status-badge status-unknown" data-role="status">Checking...</span>
+                    <span class="status-badge status-unknown" data-role="status" title="Checking...">
+                        <span class="status-dot"></span>
+                        <span data-role="status-text">Checking</span>
+                    </span>
+                    <span class="meta-extra" data-role="meta-extra"></span>
                     <span class="subdomain-title" data-role="title"></span>
                 </div>
                 <div class="subdomain-actions">
@@ -358,38 +398,76 @@ class SubdomainDashboard {
         return element;
     }
 
+    getStatusLabel(code) {
+        if (typeof code !== 'number') return 'No Response';
+        if (code >= 200 && code < 300) return 'OK';
+        if (code >= 300 && code < 400) return 'Redirect';
+        if (code >= 400 && code < 500) return 'Client Error';
+        return 'Server Error';
+    }
+
     updateSubdomainItemUI(subdomain, meta) {
         const selector = `.subdomain-item[data-subdomain="${window.CSS && CSS.escape ? CSS.escape(subdomain) : subdomain}"]`;
         const item = this.subdomainsList.querySelector(selector);
         if (!item) return;
 
         const badge = item.querySelector('[data-role="status"]');
+        const statusText = item.querySelector('[data-role="status-text"]');
         const titleEl = item.querySelector('[data-role="title"]');
+        const metaExtra = item.querySelector('[data-role="meta-extra"]');
 
         const status = typeof meta?.status_code === 'number' ? meta.status_code : null;
         const title = meta?.title || '';
+        const scheme = meta?.scheme || '';
+        const elapsed = typeof meta?.elapsed_ms === 'number' ? `${meta.elapsed_ms}ms` : '';
+        const url = meta?.url || `https://${subdomain}`;
+        const checkedAt = meta?.checked_at || '';
+        const error = meta?.error || '';
 
         // Reset classes
         badge.classList.remove('status-up', 'status-warn', 'status-down', 'status-unknown');
 
+        // Assign label and class
+        let cls = 'status-unknown';
+        let label = 'No Response';
+        let display = 'No Response';
         if (status === null) {
-            badge.textContent = 'No Response';
-            badge.classList.add('status-unknown');
+            cls = 'status-unknown';
+            label = 'No Response';
+            display = 'No Response';
         } else if (status >= 200 && status < 300) {
-            badge.textContent = `${status}`;
-            badge.classList.add('status-up');
+            cls = 'status-up';
+            label = 'OK';
+            display = `${status} ${label}`;
         } else if (status >= 300 && status < 400) {
-            badge.textContent = `${status}`;
-            badge.classList.add('status-up');
+            cls = 'status-up';
+            label = 'Redirect';
+            display = `${status} ${label}`;
         } else if (status >= 400 && status < 500) {
-            badge.textContent = `${status}`;
-            badge.classList.add('status-warn');
+            cls = 'status-warn';
+            label = 'Client Error';
+            display = `${status} ${label}`;
         } else {
-            badge.textContent = `${status}`;
-            badge.classList.add('status-down');
+            cls = 'status-down';
+            label = 'Server Error';
+            display = `${status} ${label}`;
         }
+        badge.classList.add(cls);
+        statusText.textContent = display;
 
+        // Title and meta extras
         titleEl.textContent = title ? `— ${title}` : '';
+        metaExtra.textContent = `${scheme ? scheme : ''}${scheme && elapsed ? ' • ' : ''}${elapsed}`;
+
+        // Tooltip with details
+        const tooltip = [
+            `URL: ${url}`,
+            `Status: ${status !== null ? status : 'No Response'}${status !== null ? ` (${label})` : ''}`,
+            elapsed ? `Latency: ${elapsed}` : '',
+            checkedAt ? `Checked: ${new Date(checkedAt).toLocaleString()}` : '',
+            error ? `Error: ${error}` : ''
+        ].filter(Boolean).join('\n');
+        badge.title = tooltip;
     }
 
     filterSubdomains() {
@@ -399,7 +477,8 @@ class SubdomainDashboard {
         items.forEach(item => {
             const subdomain = item.dataset.subdomain;
             const title = (item.querySelector('[data-role="title"]')?.textContent || '').toLowerCase();
-            if (subdomain.includes(filter) || title.includes(filter)) {
+            const status = (item.querySelector('[data-role="status-text"]')?.textContent || '').toLowerCase();
+            if (subdomain.includes(filter) || title.includes(filter) || status.includes(filter)) {
                 item.style.display = 'block';
             } else {
                 item.style.display = 'none';
@@ -590,10 +669,10 @@ class SubdomainDashboard {
                     ${httpOverview.map(row => `
                         <div class="analytics-item">
                             <span class="analytics-domain">${row.domain}</span>
-                            <span class="status-chip status-up">Up: ${row.counters.up}</span>
-                            <span class="status-chip status-warn">4xx: ${row.counters.warn}</span>
-                            <span class="status-chip status-down">5xx: ${row.counters.down}</span>
-                            <span class="status-chip status-unknown">No Resp: ${row.counters.unknown}</span>
+                            <span class="status-badge status-up"><span class="status-dot"></span>Up: ${row.counters.up}</span>
+                            <span class="status-badge status-warn"><span class="status-dot"></span>4xx: ${row.counters.warn}</span>
+                            <span class="status-badge status-down"><span class="status-dot"></span>5xx: ${row.counters.down}</span>
+                            <span class="status-badge status-unknown"><span class="status-dot"></span>No Resp: ${row.counters.unknown}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -717,7 +796,7 @@ class SubdomainDashboard {
     showLoading() {
         this.loadingSection.classList.remove('hidden');
         this.searchBtn.disabled = true;
-        this.searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Searching...</span>';
+        this.searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Enumerating...</span>';
     }
 
     hideLoading() {
