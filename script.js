@@ -9,8 +9,8 @@ class SubdomainDashboard {
         // Configure API endpoints based on environment
         this.configureApiEndpoints();
 
-        // Inject CSS for status badges without altering existing styles.css
-        this.injectStatusStyles();
+        // Inject minimal UI styles (sidebar + table + status badges)
+        this.injectUIStyles();
         
         this.initializeElements();
         this.bindEvents();
@@ -18,60 +18,68 @@ class SubdomainDashboard {
         this.updateDashboardStats();
     }
 
-    injectStatusStyles() {
+    injectUIStyles() {
         const css = `
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-weight: 700;
-            font-size: 0.8rem;
-            letter-spacing: .2px;
-            background: #e2e8f0;
-            color: #2d3748;
-            border: 1px solid #cbd5e0;
-            white-space: nowrap;
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #a0aec0;
-        }
-        .status-up { background: #e6fffa; color: #276749; border-color: #9ae6b4; }
-        .status-up .status-dot { background: #38a169; }
-        .status-warn { background: #fffaf0; color: #975a16; border-color: #f6ad55; }
-        .status-warn .status-dot { background: #dd6b20; }
-        .status-down { background: #fff5f5; color: #9b2c2c; border-color: #fc8181; }
-        .status-down .status-dot { background: #e53e3e; }
-        .status-unknown { background: #edf2f7; color: #4a5568; border-color: #cbd5e0; }
-        .status-unknown .status-dot { background: #a0aec0; }
-        .subdomain-title { color: #718096; margin-left: 6px; }
-        .meta-extra { color: #718096; font-size: 0.8rem; margin-left: 8px; }
-        .status-legend { display:flex; gap:8px; flex-wrap:wrap; }
-        .status-legend .status-badge { cursor: default; }
+        /* App shell layout */
+        .app-shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; background: #f8fafc; }
+        .sidebar { background: #ffffff; border-right: 1px solid #e5e7eb; padding: 16px; }
+        .content { min-width: 0; }
+
+        /* Sidebar nav */
+        .sidebar-nav { display: flex; flex-direction: column; gap: 8px; }
+        .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 16px; color: #374151; font-weight: 600; cursor: default; }
+        .nav-item i { color: #6b7280; }
+        .nav-item.active { background: #ffe8d9; color: #f97316; }
+        .nav-item.active i { color: #f97316; }
+        .nav-group > summary { list-style: none; }
+        .nav-group > summary::-webkit-details-marker { display: none; }
+        .nav-group .chevron { margin-left: auto; font-size: 12px; }
+        .nav-subitems { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; margin-left: 8px; border-left: 2px solid #f1f5f9; }
+        .nav-subitem { color: #6b7280; font-weight: 600; padding: 6px 10px; border-radius: 10px; }
+        .nav-subitem:hover { background: #f3f4f6; }
+
+        /* Table */
+        .table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+        table.sd-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        .sd-table thead th { background: #f9fafb; text-align: left; font-weight: 700; font-size: 13px; color: #374151; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
+        .sd-table tbody td { padding: 10px 12px; font-size: 14px; color: #111827; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+        .sd-table tbody tr:hover { background: #f9fafb; }
+        .sd-table .col-actions { text-align: right; white-space: nowrap; }
+
+        /* Status badge */
+        .status-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius: 999px; font-weight:700; font-size:12px; border:1px solid #cbd5e0; background:#e2e8f0; color:#2d3748; }
+        .status-badge .dot { width:8px; height:8px; border-radius:50%; background:#a0aec0; }
+        .status-up { background:#e6fffa; color:#276749; border-color:#9ae6b4; }
+        .status-up .dot { background:#38a169; }
+        .status-warn { background:#fffaf0; color:#975a16; border-color:#f6ad55; }
+        .status-warn .dot { background:#dd6b20; }
+        .status-down { background:#fff5f5; color:#9b2c2c; border-color:#fc8181; }
+        .status-down .dot { background:#e53e3e; }
+        .status-unknown { background:#edf2f7; color:#4a5568; border-color:#cbd5e0; }
+        .status-unknown .dot { background:#a0aec0; }
+
+        /* Keep existing app styling harmony */
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
         `;
         const style = document.createElement('style');
-        style.setAttribute('data-injected', 'status-styles');
+        style.setAttribute('data-injected', 'ui-styles');
         style.textContent = css;
         document.head.appendChild(style);
     }
 
     configureApiEndpoints() {
-        // Check for custom API base URL override from meta tag
         const apiBaseMetaTag = document.querySelector('meta[name="api-base-url"]');
         let apiBase;
-        
         if (apiBaseMetaTag && apiBaseMetaTag.content) {
             apiBase = apiBaseMetaTag.content.replace(/\/$/, '');
+            console.log('Using custom API base from meta tag:', apiBase);
         } else {
             apiBase = `${window.location.origin}/api`;
+            console.log('Using same-origin API base:', apiBase);
         }
-        
         this.crtApiBase = `${apiBase}/crt`;
         this.metaApiBase = `${apiBase}/meta`;
+        console.log('Configured API endpoints:', { crt: this.crtApiBase, meta: this.metaApiBase });
     }
 
     initializeElements() {
@@ -81,7 +89,7 @@ class SubdomainDashboard {
         this.loadingSection = document.getElementById('loadingSection');
         this.resultsSection = document.getElementById('resultsSection');
         this.errorSection = document.getElementById('errorSection');
-        this.subdomainsList = document.getElementById('subdomainsList');
+        this.subdomainsTableBody = document.getElementById('subdomainsTableBody');
         this.subdomainCount = document.getElementById('subdomainCount');
         this.searchedDomain = document.getElementById('searchedDomain');
         this.filterInput = document.getElementById('filterInput');
@@ -110,9 +118,7 @@ class SubdomainDashboard {
         // Scanner events
         this.searchBtn.addEventListener('click', () => this.searchSubdomains());
         this.domainInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.searchSubdomains();
-            }
+            if (e.key === 'Enter') this.searchSubdomains();
         });
         this.filterInput.addEventListener('input', () => this.filterSubdomains());
         this.exportBtn.addEventListener('click', () => this.exportSubdomains());
@@ -158,7 +164,6 @@ class SubdomainDashboard {
         const timestamp = new Date().toISOString();
         const scanId = `scan_${Date.now()}`;
 
-        // Update or create domain entry
         if (!this.scanData.domains[domain]) {
             this.scanData.domains[domain] = {
                 scans: [],
@@ -168,7 +173,6 @@ class SubdomainDashboard {
             };
         }
 
-        // Add new scan
         this.scanData.domains[domain].scans.push({
             id: scanId,
             timestamp: timestamp,
@@ -177,11 +181,9 @@ class SubdomainDashboard {
             count: subdomains.length
         });
 
-        // Update domain metadata
         this.scanData.domains[domain].totalSubdomains = subdomains.length;
         this.scanData.domains[domain].lastScan = timestamp;
 
-        // Update global metadata
         this.scanData.totalScans++;
         this.scanData.lastScan = timestamp;
 
@@ -194,11 +196,9 @@ class SubdomainDashboard {
     switchView(view) {
         this.currentView = view;
 
-        // Update tab states
         this.scannerTab.classList.toggle('active', view === 'scanner');
         this.dashboardTab.classList.toggle('active', view === 'dashboard');
 
-        // Update view visibility
         this.scannerView.classList.toggle('active', view === 'scanner');
         this.dashboardView.classList.toggle('active', view === 'dashboard');
 
@@ -212,12 +212,10 @@ class SubdomainDashboard {
     // Scanner Functionality
     async searchSubdomains() {
         const domain = this.domainInput.value.trim();
-        
         if (!domain) {
             this.showError('Please enter a domain name');
             return;
         }
-
         if (!this.isValidDomain(domain)) {
             this.showError('Please enter a valid domain name (e.g., example.com)');
             return;
@@ -229,23 +227,20 @@ class SubdomainDashboard {
         this.hideResults();
 
         try {
-            // Fetch subdomains from crt.sh only
             const crtSubdomains = await this.fetchSubdomainsFromCrtSh(domain);
-
             const finalSubdomains = Array.from(new Set(crtSubdomains)).sort();
-            
             if (finalSubdomains.length === 0) {
                 throw new Error('No subdomains found from crt.sh');
             }
-            
-            // Draw the list first
+
+            // Draw the table first
             this.displayResults(finalSubdomains);
 
             // Then enrich with metadata in batches
             this.currentMetadata = {};
             await this.enrichSubdomainsWithMetadata(finalSubdomains);
 
-            // Save scan including metadata so dashboard shows it later
+            // Save scan including metadata
             this.saveScanResult(domain, finalSubdomains, this.currentMetadata);
         } catch (error) {
             console.error('Error fetching subdomains:', error);
@@ -255,28 +250,13 @@ class SubdomainDashboard {
 
     async fetchSubdomainsFromCrtSh(domain) {
         try {
-            // Always use backend server to make API calls
             const url = `${this.crtApiBase}?domain=${encodeURIComponent(domain)}`;
-            
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
+            const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }});
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
-            
-            if (!Array.isArray(data)) {
-                throw new Error('Invalid response format from crt.sh');
-            }
+            if (!Array.isArray(data)) throw new Error('Invalid response format from crt.sh');
 
             const subdomains = new Set();
-            
             data.forEach(cert => {
                 if (cert.name_value) {
                     const names = cert.name_value.split('\n');
@@ -288,7 +268,6 @@ class SubdomainDashboard {
                     });
                 }
             });
-
             return Array.from(subdomains).sort();
         } catch (error) {
             throw new Error(`Backend server error: ${error.message}`);
@@ -316,86 +295,77 @@ class SubdomainDashboard {
     async fetchMetadataBatch(hosts) {
         const resp = await fetch(this.metaApiBase, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({ hosts, timeout_ms: 4000 })
         });
-        if (!resp.ok) {
-            throw new Error(`Meta API error: ${resp.status}`);
-        }
+        if (!resp.ok) throw new Error(`Meta API error: ${resp.status}`);
         return await resp.json();
     }
 
-    applyMetadataToUI(metadataMap) {
-        Object.entries(metadataMap || {}).forEach(([host, meta]) => {
-            this.updateSubdomainItemUI(host, meta);
-        });
-    }
-
+    // Tabular rendering
     displayResults(subdomains) {
         this.hideLoading();
         this.showResults();
-        
+
         this.searchedDomain.textContent = this.currentDomain;
         this.subdomainCount.textContent = subdomains.length;
-        
-        this.subdomainsList.innerHTML = '';
-        
+
+        this.subdomainsTableBody.innerHTML = '';
+
         if (subdomains.length === 0) {
-            this.subdomainsList.innerHTML = `
-                <div class="no-results">
-                    <i class="fas fa-search"></i>
-                    <h3>No subdomains found</h3>
-                    <p>No subdomains were found for <strong>${this.currentDomain}</strong> in certificate transparency logs.</p>
-                </div>
+            this.subdomainsTableBody.innerHTML = `
+                <tr><td colspan="6">
+                    <div class="no-results">
+                        <i class="fas fa-search"></i>
+                        <h3>No subdomains found</h3>
+                        <p>No subdomains were found for <strong>${this.currentDomain}</strong> in certificate transparency logs.</p>
+                    </div>
+                </td></tr>
             `;
             return;
         }
 
-        subdomains.forEach(subdomain => {
-            const subdomainElement = this.createSubdomainElement(subdomain);
-            this.subdomainsList.appendChild(subdomainElement);
-        });
+        const frag = document.createDocumentFragment();
+        subdomains.forEach(sd => frag.appendChild(this.createSubdomainRow(sd)));
+        this.subdomainsTableBody.appendChild(frag);
 
         this.allSubdomains = subdomains;
     }
 
-    createSubdomainElement(subdomain) {
-        const element = document.createElement('div');
-        element.className = 'subdomain-item';
-        element.dataset.subdomain = subdomain;
-        
-        const isMainDomain = subdomain === this.currentDomain.toLowerCase();
-        const subdomainType = isMainDomain ? 'main' : 'sub';
-        
-        element.innerHTML = `
-            <div class="subdomain-content">
-                <div class="subdomain-info">
+    createSubdomainRow(subdomain) {
+        const tr = document.createElement('tr');
+        tr.className = 'subdomain-row';
+        tr.dataset.subdomain = subdomain;
+
+        tr.innerHTML = `
+            <td class="col-subdomain">
+                <div class="sd-cell">
                     <span class="subdomain-name">${subdomain}</span>
-                    <span class="subdomain-type ${subdomainType}">${isMainDomain ? 'Main Domain' : 'Subdomain'}</span>
                 </div>
-                <div class="subdomain-meta">
-                    <span class="status-badge status-unknown" data-role="status" title="Checking...">
-                        <span class="status-dot"></span>
-                        <span data-role="status-text">Checking</span>
-                    </span>
-                    <span class="meta-extra" data-role="meta-extra"></span>
-                    <span class="subdomain-title" data-role="title"></span>
-                </div>
-                <div class="subdomain-actions">
-                    <button class="action-btn copy-btn" onclick="navigator.clipboard.writeText('${subdomain}')" title="Copy to clipboard">
-                        <i class="fas fa-copy"></i>
-                    </button>
-                    <a href="https://${subdomain}" target="_blank" class="action-btn visit-btn" title="Visit website">
-                        <i class="fas fa-external-link-alt"></i>
-                    </a>
-                </div>
-            </div>
+            </td>
+            <td class="col-status">
+                <span class="status-badge status-unknown" data-role="status" title="Checking...">
+                    <span class="dot"></span>
+                    <span data-role="status-text">Checking</span>
+                </span>
+            </td>
+            <td class="col-title" data-role="title"></td>
+            <td class="col-scheme" data-role="scheme"></td>
+            <td class="col-elapsed" data-role="elapsed"></td>
+            <td class="col-actions">
+                <button class="action-btn copy-btn" title="Copy" aria-label="Copy subdomain">
+                    <i class="fas fa-copy"></i>
+                </button>
+                <a href="https://${subdomain}" target="_blank" class="action-btn visit-btn" title="Open" aria-label="Open subdomain">
+                    <i class="fas fa-external-link-alt"></i>
+                </a>
+            </td>
         `;
-        
-        return element;
+
+        const copyBtn = tr.querySelector('.copy-btn');
+        copyBtn.addEventListener('click', () => navigator.clipboard.writeText(subdomain));
+
+        return tr;
     }
 
     getStatusLabel(code) {
@@ -407,14 +377,15 @@ class SubdomainDashboard {
     }
 
     updateSubdomainItemUI(subdomain, meta) {
-        const selector = `.subdomain-item[data-subdomain="${window.CSS && CSS.escape ? CSS.escape(subdomain) : subdomain}"]`;
-        const item = this.subdomainsList.querySelector(selector);
-        if (!item) return;
+        const selector = `.subdomain-row[data-subdomain="${window.CSS && CSS.escape ? CSS.escape(subdomain) : subdomain}"]`;
+        const row = this.subdomainsTableBody.querySelector(selector);
+        if (!row) return;
 
-        const badge = item.querySelector('[data-role="status"]');
-        const statusText = item.querySelector('[data-role="status-text"]');
-        const titleEl = item.querySelector('[data-role="title"]');
-        const metaExtra = item.querySelector('[data-role="meta-extra"]');
+        const badge = row.querySelector('[data-role="status"]');
+        const statusText = row.querySelector('[data-role="status-text"]');
+        const titleEl = row.querySelector('[data-role="title"]');
+        const schemeEl = row.querySelector('[data-role="scheme"]');
+        const elapsedEl = row.querySelector('[data-role="elapsed"]');
 
         const status = typeof meta?.status_code === 'number' ? meta.status_code : null;
         const title = meta?.title || '';
@@ -427,13 +398,11 @@ class SubdomainDashboard {
         // Reset classes
         badge.classList.remove('status-up', 'status-warn', 'status-down', 'status-unknown');
 
-        // Assign label and class
         let cls = 'status-unknown';
         let label = 'No Response';
         let display = 'No Response';
         if (status === null) {
             cls = 'status-unknown';
-            label = 'No Response';
             display = 'No Response';
         } else if (status >= 200 && status < 300) {
             cls = 'status-up';
@@ -455,11 +424,10 @@ class SubdomainDashboard {
         badge.classList.add(cls);
         statusText.textContent = display;
 
-        // Title and meta extras
-        titleEl.textContent = title ? `— ${title}` : '';
-        metaExtra.textContent = `${scheme ? scheme : ''}${scheme && elapsed ? ' • ' : ''}${elapsed}`;
+        titleEl.textContent = title || '';
+        schemeEl.textContent = scheme || '';
+        elapsedEl.textContent = elapsed || '';
 
-        // Tooltip with details
         const tooltip = [
             `URL: ${url}`,
             `Status: ${status !== null ? status : 'No Response'}${status !== null ? ` (${label})` : ''}`,
@@ -468,36 +436,33 @@ class SubdomainDashboard {
             error ? `Error: ${error}` : ''
         ].filter(Boolean).join('\n');
         badge.title = tooltip;
+
+        // Update open link to correct scheme if available
+        const openLink = row.querySelector('.visit-btn');
+        if (openLink && meta?.scheme) openLink.href = `${meta.scheme}://${subdomain}`;
     }
 
     filterSubdomains() {
         const filter = this.filterInput.value.toLowerCase();
-        const items = this.subdomainsList.querySelectorAll('.subdomain-item');
-        
-        items.forEach(item => {
-            const subdomain = item.dataset.subdomain;
-            const title = (item.querySelector('[data-role="title"]')?.textContent || '').toLowerCase();
-            const status = (item.querySelector('[data-role="status-text"]')?.textContent || '').toLowerCase();
-            if (subdomain.includes(filter) || title.includes(filter) || status.includes(filter)) {
-                item.style.display = 'block';
-            } else {
-                item.style.display = 'none';
-            }
+        const rows = this.subdomainsTableBody.querySelectorAll('.subdomain-row');
+
+        rows.forEach(row => {
+            const sub = row.dataset.subdomain.toLowerCase();
+            const status = (row.querySelector('[data-role="status-text"]')?.textContent || '').toLowerCase();
+            const title = (row.querySelector('[data-role="title"]')?.textContent || '').toLowerCase();
+            const visible = sub.includes(filter) || status.includes(filter) || title.includes(filter);
+            row.style.display = visible ? '' : 'none';
         });
 
-        const visibleCount = Array.from(items).filter(item => item.style.display !== 'none').length;
+        const visibleCount = Array.from(rows).filter(r => r.style.display !== 'none').length;
         this.subdomainCount.textContent = visibleCount;
     }
 
     exportSubdomains() {
-        if (!this.allSubdomains || this.allSubdomains.length === 0) {
-            return;
-        }
-
+        if (!this.allSubdomains || this.allSubdomains.length === 0) return;
         const content = this.allSubdomains.join('\n');
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
-        
         const a = document.createElement('a');
         a.href = url;
         a.download = `subdomains_${this.currentDomain}_${new Date().toISOString().split('T')[0]}.txt`;
@@ -527,19 +492,13 @@ class SubdomainDashboard {
 
     updateScanHistory() {
         const historyContainer = this.scanHistoryList;
-        
-        // Get all scans sorted by timestamp (most recent first)
+
         const allScans = [];
         Object.entries(this.scanData.domains).forEach(([domain, domainData]) => {
             domainData.scans.forEach(scan => {
-                allScans.push({
-                    domain,
-                    ...scan,
-                    domainData
-                });
+                allScans.push({ domain, ...scan, domainData });
             });
         });
-
         allScans.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
         if (allScans.length === 0) {
@@ -554,7 +513,7 @@ class SubdomainDashboard {
         }
 
         historyContainer.innerHTML = '';
-        allScans.slice(0, 20).forEach(scan => { // Show latest 20 scans
+        allScans.slice(0, 20).forEach(scan => {
             const historyItem = this.createHistoryItem(scan);
             historyContainer.appendChild(historyItem);
         });
@@ -602,7 +561,6 @@ class SubdomainDashboard {
                 </button>
             </div>
         `;
-
         return element;
     }
 
@@ -621,16 +579,11 @@ class SubdomainDashboard {
             return;
         }
 
-        // Create simple analytics display
         const topDomains = domains
-            .map(domain => ({
-                domain,
-                ...this.scanData.domains[domain]
-            }))
+            .map(domain => ({ domain, ...this.scanData.domains[domain] }))
             .sort((a, b) => b.totalSubdomains - a.totalSubdomains)
             .slice(0, 10);
 
-        // HTTP status overview from the latest scan per domain (if metadata exists)
         const httpOverview = [];
         topDomains.forEach(d => {
             const lastScan = d.scans[d.scans.length - 1];
@@ -638,15 +591,10 @@ class SubdomainDashboard {
             const counters = { up: 0, warn: 0, down: 0, unknown: 0 };
             Object.values(meta).forEach(m => {
                 const s = m?.status_code;
-                if (typeof s !== 'number') {
-                    counters.unknown++;
-                } else if (s >= 200 && s < 400) {
-                    counters.up++;
-                } else if (s >= 400 && s < 500) {
-                    counters.warn++;
-                } else {
-                    counters.down++;
-                }
+                if (typeof s !== 'number') counters.unknown++;
+                else if (s >= 200 && s < 400) counters.up++;
+                else if (s >= 400 && s < 500) counters.warn++;
+                else counters.down++;
             });
             httpOverview.push({ domain: d.domain, counters, total: d.totalSubdomains });
         });
@@ -669,10 +617,10 @@ class SubdomainDashboard {
                     ${httpOverview.map(row => `
                         <div class="analytics-item">
                             <span class="analytics-domain">${row.domain}</span>
-                            <span class="status-badge status-up"><span class="status-dot"></span>Up: ${row.counters.up}</span>
-                            <span class="status-badge status-warn"><span class="status-dot"></span>4xx: ${row.counters.warn}</span>
-                            <span class="status-badge status-down"><span class="status-dot"></span>5xx: ${row.counters.down}</span>
-                            <span class="status-badge status-unknown"><span class="status-dot"></span>No Resp: ${row.counters.unknown}</span>
+                            <span class="status-badge status-up"><span class="dot"></span>Up: ${row.counters.up}</span>
+                            <span class="status-badge status-warn"><span class="dot"></span>4xx: ${row.counters.warn}</span>
+                            <span class="status-badge status-down"><span class="dot"></span>5xx: ${row.counters.down}</span>
+                            <span class="status-badge status-unknown"><span class="dot"></span>No Resp: ${row.counters.unknown}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -688,7 +636,6 @@ class SubdomainDashboard {
         const scan = domainData.scans.find(s => s.id === scanId);
         if (!scan) return;
 
-        // Switch to scanner view and populate with scan data
         this.switchView('scanner');
         this.domainInput.value = domain;
         this.currentDomain = domain;
@@ -708,7 +655,6 @@ class SubdomainDashboard {
         const content = scan.subdomains.join('\n');
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
-        
         const a = document.createElement('a');
         a.href = url;
         a.download = `subdomains_${domain}_${new Date(scan.timestamp).toISOString().split('T')[0]}.txt`;
@@ -726,11 +672,7 @@ class SubdomainDashboard {
 
     clearHistory() {
         if (confirm('Are you sure you want to clear all scan history? This action cannot be undone.')) {
-            this.scanData = {
-                domains: {},
-                totalScans: 0,
-                lastScan: null
-            };
+            this.scanData = { domains: {}, totalScans: 0, lastScan: null };
             this.saveData();
             this.updateDashboardStats();
             this.updateScanHistory();
@@ -749,8 +691,7 @@ class SubdomainDashboard {
             summary: {
                 totalDomains: Object.keys(this.scanData.domains).length,
                 totalScans: this.scanData.totalScans,
-                totalSubdomains: Object.values(this.scanData.domains)
-                    .reduce((sum, domain) => sum + domain.totalSubdomains, 0)
+                totalSubdomains: Object.values(this.scanData.domains).reduce((sum, d) => sum + d.totalSubdomains, 0)
             },
             domains: this.scanData.domains
         };
@@ -758,7 +699,6 @@ class SubdomainDashboard {
         const content = JSON.stringify(exportData, null, 2);
         const blob = new Blob([content], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        
         const a = document.createElement('a');
         a.href = url;
         a.download = `subdomain_scanner_export_${new Date().toISOString().split('T')[0]}.json`;
@@ -792,7 +732,7 @@ class SubdomainDashboard {
         return date.toLocaleDateString();
     }
 
-    // UI State Management
+    // UI State
     showLoading() {
         this.loadingSection.classList.remove('hidden');
         this.searchBtn.disabled = true;
@@ -821,6 +761,12 @@ class SubdomainDashboard {
 
     hideError() {
         this.errorSection.classList.add('hidden');
+    }
+
+    applyMetadataToUI(metadataMap) {
+        Object.entries(metadataMap || {}).forEach(([host, meta]) => {
+            this.updateSubdomainItemUI(host, meta);
+        });
     }
 }
 
