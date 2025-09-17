@@ -6,7 +6,7 @@ Makes server-side API calls to avoid CORS issues
 import json
 import urllib.request
 import urllib.parse
-from http.server import HTTPServer, BaseHTTPRequestHandler, SimpleHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 import ssl
 import os
@@ -172,7 +172,7 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(b'{"error":"Provide a non-empty \'hosts\' array"}')
+            self.wfile.write(b'{"error":"Provide a non-empty hosts array"}')
             return
 
         if len(hosts) > 200:
