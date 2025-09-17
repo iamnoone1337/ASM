@@ -9,6 +9,7 @@ Features:
   - Wayback Machine (CDX) via /api/wayback
   - Subfinder via /api/subfinder (optional; requires subfinder installed)
 - HTTP metadata (status/title) via /api/meta
+  - Includes passive fingerprinting: technologies inferred from headers/HTML
 - Monitoring automation:
   - Manage monitors via /api/monitor (GET/POST/DELETE)
   - Background rescans every interval_hours (default 12)
@@ -42,7 +43,7 @@ from datetime import datetime, timezone, timedelta
 import re
 import html
 import asyncio
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 
 try:
     import httpx  # Ensure dependency installed: pip install httpx
@@ -89,7 +90,6 @@ class AuthManager:
         env = os.environ.get("REQUIRE_AUTH")
         if env is not None:
             return env.strip().lower() in ("1", "true", "yes", "on")
-        # If an auth file exists with credentials, enforce auth by default.
         return bool(self.config.get("username") and self.config.get("password"))
 
     def check_basic(self, header_value: Optional[str]) -> bool:
@@ -100,7 +100,6 @@ class AuthManager:
         try:
             import base64
             decoded = base64.b64decode(header_value.split(" ", 1)[1]).decode("utf-8", "ignore")
-            # Format: username:password
             if ":" not in decoded:
                 return False
             u, p = decoded.split(":", 1)
@@ -112,15 +111,11 @@ class AuthManager:
 # ---------- Monitor Manager ----------
 class MonitorManager:
     def __init__(self, handler_cls_ref):
-        # Monitors persisted on disk
         self.file_path = os.path.abspath("monitors.json")
         self.state = load_json(self.file_path, {"monitors": {}})
-        # Recent in-memory events for /api/monitor/updates polling
         self.recent_events: List[Dict[str, Any]] = []
         self.recent_lock = threading.Lock()
-        # Reference to handler class for calling shared fetch functions
         self.handler_cls = handler_cls_ref
-        # Thread control
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._runner, daemon=True)
         self.thread.start()
@@ -175,7 +170,6 @@ class MonitorManager:
         }
         with self.recent_lock:
             self.recent_events.append(evt)
-            # Keep last 200 events
             if len(self.recent_events) > 200:
                 self.recent_events = self.recent_events[-200:]
 
@@ -197,14 +191,12 @@ class MonitorManager:
             return out
 
     def _runner(self):
-        # Background scheduler loop
         print("Monitor thread started (12h default interval).")
         while not self.stop_event.is_set():
             try:
                 self._tick()
             except Exception as e:
                 print(f"Monitor tick error: {e}")
-            # Wake up every 5 minutes to check if any monitor is due
             self.stop_event.wait(300.0)
 
     def _tick(self):
@@ -230,7 +222,6 @@ class MonitorManager:
                 continue
 
             print(f"[monitor] Running scheduled scan for {domain}")
-            # Perform a scan using the same logic as API sources
             all_subs = self._scan_domain(domain)
             prev = set(m.get("last_results") or [])
             found = set(all_subs)
@@ -248,7 +239,6 @@ class MonitorManager:
                 self.add_event(domain, new_assets)
 
     def _scan_domain(self, domain: str) -> List[str]:
-        # Use handler class helpers (static functions below)
         crt = SubdomainAPIHandler.fetch_crt_subdomains(domain)
         wb = SubdomainAPIHandler.fetch_wayback_subdomains(domain)
         sf = SubdomainAPIHandler.run_subfinder(domain)
@@ -267,7 +257,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
 
     # ------------- Request entry points -------------
     def do_OPTIONS(self):
-        # CORS preflight; don't enforce auth to allow browsers to send credentials later
         self.send_response(200)
         self._cors()
         self._std_headers()
@@ -278,7 +267,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
             return
         parsed_path = urlparse(self.path)
 
-        # API endpoints
         if parsed_path.path == '/api/crt':
             return self.handle_crt_api(parsed_path)
         if parsed_path.path == '/api/wayback':
@@ -290,7 +278,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
         if parsed_path.path == '/api/monitor/updates':
             return self.handle_monitor_updates_get(parsed_path)
 
-        # Static files (if configured)
         static_dir = os.environ.get('STATIC_DIR')
         if static_dir and os.path.isdir(static_dir):
             return self.handle_static_file(parsed_path, static_dir)
@@ -321,13 +308,11 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
 
     # ------------- Auth/CORS/Headers helpers -------------
     def _enforce_auth(self) -> bool:
-        # Exempt OPTIONS
         if self.command == "OPTIONS":
             return True
         ok = self.auth_manager.check_basic(self.headers.get("Authorization"))
         if ok:
             return True
-        # Challenge
         self.send_response(401)
         self._cors()
         self.send_header("WWW-Authenticate", 'Basic realm="ASM"')
@@ -337,7 +322,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
         return False
 
     def _cors(self):
-        # Same-origin recommended; keep * for simplicity during development
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
@@ -352,7 +336,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
             if not file_path or file_path == '/':
                 file_path = 'index.html'
             full_path = os.path.join(static_dir, file_path)
-            # Security check
             if not os.path.abspath(full_path).startswith(os.path.abspath(static_dir)):
                 self.send_error(403, "Access denied")
                 return
@@ -385,7 +368,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
                 return
 
             data = self.fetch_crt_raw(domain)
-            # pass-through raw JSON from crt.sh (array)
             self.send_response(200)
             self._cors()
             self._std_headers()
@@ -491,7 +473,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
     def run_subfinder(domain: str) -> List[str]:
         subfinder_bin = os.environ.get('SUBFINDER_BIN', 'subfinder')
         if not shutil.which(subfinder_bin):
-            # Tool not installed
             return []
         try:
             proc = subprocess.run(
@@ -540,24 +521,23 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
             payload = json.loads(body.decode('utf-8') or '{}')
         except Exception:
             self.send_error(400, "Invalid JSON")
-            return
-        domain = (payload.get("domain") or "").strip().lower()
-        enabled = bool(payload.get("enabled", True))
-        interval_hours = payload.get("interval_hours")
-        if not domain:
-            self.send_error(400, "Missing domain")
-            return
-        # Basic domain validation (same regex as frontend roughly)
-        if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.([a-zA-Z]{2,}|[a-zA-Z]{2,}\.[a-zA-Z]{2,})$", domain):
-            self.send_error(400, "Invalid domain")
-            return
-        m = self.monitor_mgr.set_monitor(domain, enabled, interval_hours)
-        self.send_response(200)
-        self._cors()
-        self._std_headers()
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps(m).encode("utf-8"))
+        else:
+            domain = (payload.get("domain") or "").strip().lower()
+            enabled = bool(payload.get("enabled", True))
+            interval_hours = payload.get("interval_hours")
+            if not domain:
+                self.send_error(400, "Missing domain")
+                return
+            if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.([a-zA-Z]{2,}|[a-zA-Z]{2,}\.[a-zA-Z]{2,})$", domain):
+                self.send_error(400, "Invalid domain")
+                return
+            m = self.monitor_mgr.set_monitor(domain, enabled, interval_hours)
+            self.send_response(200)
+            self._cors()
+            self._std_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(m).encode("utf-8"))
 
     def handle_monitor_delete(self, parsed_path):
         params = parse_qs(parsed_path.query)
@@ -588,7 +568,7 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(payload).encode("utf-8"))
 
-    # ------------- Metadata endpoint -------------
+    # ------------- Metadata + fingerprint endpoint -------------
     def handle_meta_api(self):
         if httpx is None:
             self.send_response(500)
@@ -633,7 +613,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
             self.wfile.write(b'{"error":"Too many hosts; max 200 per request"}')
             return
 
-        # Normalize and deduplicate
         ordered_hosts = []
         seen = set()
         for h in hosts:
@@ -657,7 +636,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
             results = loop.run_until_complete(fetch_metadata_for_hosts(ordered_hosts, timeout))
             loop.close()
 
-        # Preserve original order
         order_index = {h: i for i, h in enumerate(ordered_hosts)}
         results.sort(key=lambda r: order_index.get(r.get('host', ''), 10**9))
 
@@ -673,6 +651,16 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
 
 # ---------- Helpers for /api/meta ----------
 TITLE_RE = re.compile(r'<title[^>]*>(.*?)</title>', re.IGNORECASE | re.DOTALL)
+META_GENERATOR_RE = re.compile(r'<meta[^>]+name=["\']generator["\'][^>]+content=["\']([^"\']+)["\']', re.I)
+JQUERY_RE = re.compile(r'jquery[^/]*\.js', re.I)
+BOOTSTRAP_RE = re.compile(r'bootstrap[^/]*\.(?:css|js)', re.I)
+FONT_AWESOME_RE = re.compile(r'font-?awesome[^/]*\.(?:css|js)', re.I)
+REACT_RE = re.compile(r'__NEXT_DATA__|React\.createElement|data-reactroot', re.I)
+ANGULAR_RE = re.compile(r'ng-version=|angular\.js', re.I)
+VUE_RE = re.compile(r'data-server-rendered|vue(?:\.min)?\.js', re.I)
+WORDPRESS_RE = re.compile(r'wp-content|wordpress', re.I)
+DRUPAL_RE = re.compile(r'Drupal|drupal-settings-json', re.I)
+JOOMLA_RE = re.compile(r'Joomla!', re.I)
 
 def extract_title_from_html(html_text: str) -> str:
     try:
@@ -684,6 +672,92 @@ def extract_title_from_html(html_text: str) -> str:
         return html.unescape(title)
     except Exception:
         return ''
+
+def _parse_version(s: str) -> str:
+    m = re.search(r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)', s or '')
+    return m.group(1) if m else ''
+
+def fingerprint_from(headers: Dict[str, str], text: str) -> List[Dict[str, Any]]:
+    techs: List[Dict[str, Any]] = []
+    H = {k.lower(): v for k, v in (headers or {}).items()}
+
+    server = H.get('server', '')
+    xpb = H.get('x-powered-by', '')
+    set_cookie = H.get('set-cookie', '')
+
+    def add(vendor, product, evidence, version=''):
+        techs.append({
+            "vendor": vendor, "product": product, "version": version or "",
+            "evidence": evidence
+        })
+
+    # Servers
+    if 'nginx' in server.lower():
+        add('nginx', 'nginx', f"server: {server}", _parse_version(server))
+    if 'apache' in server.lower():
+        add('Apache', 'httpd', f"server: {server}", _parse_version(server))
+    if 'iis' in server.lower():
+        add('Microsoft', 'IIS', f"server: {server}", _parse_version(server))
+    if 'cloudflare' in server.lower() or 'cf-ray' in H:
+        add('Cloudflare', 'Cloudflare', "headers: cloudflare")
+
+    # X-Powered-By
+    xl = xpb.lower()
+    if 'php' in xl or 'phpsessid' in set_cookie.lower():
+        add('PHP', 'PHP', f"x-powered-by: {xpb}", _parse_version(xpb))
+    if 'express' in xl:
+        add('Express', 'Express', f"x-powered-by: {xpb}", _parse_version(xpb))
+    if 'asp.net' in xl or 'x-aspnet-version' in H:
+        add('Microsoft', 'ASP.NET', f"headers: {xpb or 'x-aspnet-version'}", _parse_version(xpb or H.get('x-aspnet-version','')))
+
+    # HTML indicators
+    gen = ''
+    try:
+        m = META_GENERATOR_RE.search(text or '')
+        if m:
+            gen = m.group(1)
+    except Exception:
+        pass
+    if gen:
+        low = gen.lower()
+        if 'wordpress' in low:
+            add('WordPress', 'WordPress', f'meta generator: {gen}', _parse_version(gen))
+        elif 'drupal' in low:
+            add('Drupal', 'Drupal', f'meta generator: {gen}', _parse_version(gen))
+        elif 'joomla' in low:
+            add('Joomla', 'Joomla!', f'meta generator: {gen}', _parse_version(gen))
+        else:
+            add(gen.split()[0].capitalize(), gen, f'meta generator: {gen}', _parse_version(gen))
+
+    # Popular libs (very light)
+    if JQUERY_RE.search(text or ''):
+        add('jQuery', 'jQuery', "script: jquery*.js")
+    if BOOTSTRAP_RE.search(text or ''):
+        add('Bootstrap', 'Bootstrap', "bootstrap .css/.js")
+    if FONT_AWESOME_RE.search(text or ''):
+        add('Font Awesome', 'Font Awesome', "font-awesome .css/.js")
+    if REACT_RE.search(text or ''):
+        add('React', 'React', "react markers")
+    if ANGULAR_RE.search(text or ''):
+        add('Angular', 'Angular', "angular markers")
+    if VUE_RE.search(text or ''):
+        add('Vue', 'Vue', "vue markers")
+    if WORDPRESS_RE.search(text or ''):
+        add('WordPress', 'WordPress', "wp-content/html markers")
+    if DRUPAL_RE.search(text or ''):
+        add('Drupal', 'Drupal', "html markers")
+    if JOOMLA_RE.search(text or ''):
+        add('Joomla', 'Joomla!', "html markers")
+
+    # Deduplicate by (vendor, product, version)
+    seen = set()
+    unique = []
+    for t in techs:
+        key = (t['vendor'], t['product'], t.get('version',''))
+        if key not in seen:
+            seen.add(key)
+            unique.append(t)
+    return unique
 
 async def fetch_one_host(host: str, timeout: float) -> Dict[str, Any]:
     headers = {
@@ -702,13 +776,17 @@ async def fetch_one_host(host: str, timeout: float) -> Dict[str, Any]:
             try:
                 resp = await client.get(url)
                 status = resp.status_code
-                content_type = resp.headers.get('content-type', '')
+                ctype = resp.headers.get('content-type', '')
                 title = ''
-                if isinstance(content_type, str) and 'text/html' in content_type.lower():
+                body_text = ''
+                if isinstance(ctype, str) and 'text/html' in ctype.lower():
                     text = resp.text
                     if len(text) > 200000:
                         text = text[:200000]
+                    body_text = text
                     title = extract_title_from_html(text)
+
+                techs = fingerprint_from(resp.headers, body_text)
 
                 return {
                     "host": host,
@@ -718,7 +796,13 @@ async def fetch_one_host(host: str, timeout: float) -> Dict[str, Any]:
                     "title": title,
                     "checked_at": datetime.utcnow().strftime(ISO),
                     "elapsed_ms": int((time.time() - start) * 1000),
-                    "error": ""
+                    "error": "",
+                    "headers": {
+                        "server": resp.headers.get("server", ""),
+                        "x-powered-by": resp.headers.get("x-powered-by", ""),
+                        "content-type": resp.headers.get("content-type", "")
+                    },
+                    "technologies": techs
                 }
             except httpx.RequestError as e:
                 error_msg = str(e)
@@ -733,7 +817,9 @@ async def fetch_one_host(host: str, timeout: float) -> Dict[str, Any]:
         "title": "",
         "checked_at": datetime.utcnow().strftime(ISO),
         "elapsed_ms": None,
-        "error": error_msg
+        "error": error_msg,
+        "headers": {},
+        "technologies": []
     }
 
 async def fetch_metadata_for_hosts(hosts: List[str], timeout: float) -> List[Dict[str, Any]]:
@@ -747,7 +833,6 @@ if __name__ == '__main__':
     static_dir = os.environ.get('STATIC_DIR')
 
     httpd = ThreadingHTTPServer((host, port), SubdomainAPIHandler)
-    # Attach the handler class to monitor manager if needed
     SubdomainAPIHandler.monitor_mgr.handler_cls = SubdomainAPIHandler
 
     print(f"Subdomain enumeration server running on http://{host}:{port}")
@@ -757,7 +842,7 @@ if __name__ == '__main__':
     print("API Endpoints:")
     print("  - GET  /api/crt?domain=example.com")
     print("  - GET  /api/wayback?domain=example.com")
-    print("  - GET  /api/subfinder?domain=example.com   (requires subfinder installed)")
+    print("  - GET  /api/subfinder?domain=example.com")
     print('  - POST /api/meta   ({"hosts":["a.example.com"], "timeout_ms":4000})')
     print('  - GET  /api/monitor                              (list all)')
     print('  - GET  /api/monitor?domain=example.com           (get one)')
@@ -777,7 +862,7 @@ if __name__ == '__main__':
     print("  - https://crt.sh/?q=%.DOMAIN&output=json")
     print("  - https://web.archive.org/cdx/search/cdx?url=*.DOMAIN&fl=original&collapse=urlkey")
     print("  - subfinder -silent -d DOMAIN (optional)")
-    print("  - http(s)://<subdomain> for status/title via httpx")
+    print("  - http(s)://<subdomain> for status/title and passive tech fingerprinting")
 
     try:
         httpd.serve_forever()
