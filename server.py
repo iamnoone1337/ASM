@@ -62,32 +62,28 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
     def handle_static_file(self, parsed_path, static_dir):
         """Handle static file requests"""
         try:
-            # Remove leading slash and handle root path
             file_path = parsed_path.path.lstrip('/')
             if not file_path or file_path == '/':
                 file_path = 'index.html'
             
             full_path = os.path.join(static_dir, file_path)
             
-            # Security check - ensure we're not serving files outside static_dir
+            # Security check
             if not os.path.abspath(full_path).startswith(os.path.abspath(static_dir)):
                 self.send_error(403, "Access denied")
                 return
             
             if os.path.isfile(full_path):
-                # Determine content type
                 content_type, _ = mimetypes.guess_type(full_path)
                 if not content_type:
                     content_type = 'application/octet-stream'
                 
-                # Read and serve file
                 with open(full_path, 'rb') as f:
                     content = f.read()
                 
                 self.send_response(200)
                 self.send_header('Content-Type', content_type)
                 self.send_header('Content-Length', str(len(content)))
-                # Add CORS headers for development flexibility
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(content)
@@ -101,7 +97,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
     def handle_crt_api(self, parsed_path):
         """Handle crt.sh API requests - server-side call"""
         try:
-            # Extract domain from query parameters
             query_params = parse_qs(parsed_path.query)
             domain = query_params.get('domain', [None])[0]
             
@@ -109,17 +104,13 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
                 self.send_error(400, "Missing domain parameter")
                 return
             
-            # Make server-side API call to crt.sh
             crt_url = f"https://crt.sh/?q=%.{domain}&output=json"
             
             try:
-                # Create SSL context for secure connection
                 ssl_context = ssl.create_default_context()
-                
                 with urllib.request.urlopen(crt_url, context=ssl_context) as response:
                     data = response.read()
                 
-                # Send response with CORS headers
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
@@ -128,7 +119,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
                 
             except Exception as api_error:
                 print(f"Error calling crt.sh API: {api_error}")
-                # Return empty array if API call fails
                 empty_response = json.dumps([]).encode('utf-8')
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
@@ -141,7 +131,6 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
             self.send_error(500, f"Error fetching from crt.sh: {str(e)}")
 
     # ---------- New: /api/meta to fetch status code + title via httpx ----------
-
     def handle_meta_api(self):
         """Handle POST /api/meta for fetching status codes and titles."""
         if httpx is None:
@@ -203,8 +192,7 @@ class SubdomainAPIHandler(BaseHTTPRequestHandler):
         try:
             results = asyncio.run(fetch_metadata_for_hosts(ordered_hosts, timeout))
         except RuntimeError:
-            # In case there's already a running loop (rare with BaseHTTPRequestHandler),
-            # create a new loop manually.
+            # If a loop is already running, create a new one
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             results = loop.run_until_complete(fetch_metadata_for_hosts(ordered_hosts, timeout))
@@ -257,8 +245,6 @@ async def fetch_one_host(host: str, timeout: float) -> Dict[str, Any]:
                 content_type = resp.headers.get('content-type', '')
                 title = ''
                 if isinstance(content_type, str) and 'text/html' in content_type.lower():
-                    # httpx already decodes text using apparent encoding
-                    # Limit to avoid huge pages
                     text = resp.text
                     if len(text) > 200000:
                         text = text[:200000]
@@ -295,7 +281,6 @@ async def fetch_metadata_for_hosts(hosts: List[str], timeout: float) -> List[Dic
     return await asyncio.gather(*tasks)
 
 if __name__ == '__main__':
-    # Get configuration from environment variables
     host = os.environ.get('HOST', '0.0.0.0')
     port = int(os.environ.get('PORT', '8001'))
     static_dir = os.environ.get('STATIC_DIR')
@@ -305,7 +290,7 @@ if __name__ == '__main__':
     print(f"Subdomain enumeration server running on http://{host}:{port}")
     print("API Endpoints:")
     print(f"  - GET  /api/crt?domain=example.com")
-    print(f"  - POST /api/meta   ({{\"hosts\":[\"a.example.com\"], \"timeout_ms\":4000}})")
+    print(f"  - POST /api/meta   ({\"hosts\":[\"a.example.com\"], \"timeout_ms\":4000})")
     
     if static_dir:
         if os.path.isdir(static_dir):
