@@ -14,23 +14,30 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <nav class="sidebar-nav">
-                <a href="javascript:void(0)" class="nav-item active" id="navOverview">
+                <a href="javascript:void(0)" class="nav-item" id="navOverview">
                     <i class="fas fa-home"></i>
                     <span>Overview</span>
                 </a>
+
+                <!-- Separate top-level navigation (not inside Assets) -->
+                <a href="javascript:void(0)" class="nav-item active" id="leftScannerLink">
+                    <i class="fas fa-search"></i>
+                    <span>Scanner</span>
+                </a>
+                <a href="javascript:void(0)" class="nav-item" id="leftDashboardLink">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+
+                <!-- Assets group: contains only assets -->
                 <details class="nav-group" open>
                     <summary class="nav-item" id="navAssets">
-                        <i class="fas fa-file-alt"></i>
+                        <i class="fas fa-folder-open"></i>
                         <span>Assets</span>
                         <i class="fas fa-chevron-down chevron"></i>
                     </summary>
-                    <div class="nav-subitems">
-                        <!-- Primary navigation -->
-                        <a href="javascript:void(0)" class="nav-subitem active" id="leftScannerLink">Scanner</a>
-                        <a href="javascript:void(0)" class="nav-subitem" id="leftDashboardLink">Dashboard</a>
-
-                        <!-- Dynamic assets list -->
-                        <div id="assetsList" style="margin-top:8px;"></div>
+                    <div id="assetsList" class="nav-subitems">
+                        <!-- Dynamically populated with domains only -->
                     </div>
                 </details>
             </nav>
@@ -46,7 +53,7 @@
                             Subdomain Enumerator
                         </h1>
                         <p class="subtitle">Discover subdomains using crt.sh, Wayback Machine, and Subfinder. Enable monitoring to rescan every 12h and get alerts on new assets.</p>
-                        <!-- Center tabs removed; nav is on the left sidebar -->
+                        <!-- Center tabs removed; navigation is in the left sidebar -->
                     </div>
                 </header>
 
@@ -156,7 +163,7 @@
                                 <div>
                                     <h2 id="assetName" style="font-size:28px; margin:0 0 6px 0;"></h2>
                                     <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                                        <span id="assetRelatedDomain" class="status-badge status-up"><span class="dot"></span><span>Up</span></span>
+                                        <span id="assetRelatedDomain" class="status-badge status-up"><span class="dot"></span><span>Availability • Up</span></span>
                                         <span id="assetCreatedOn" class="status-badge status-unknown"><span class="dot"></span><span>Created on —</span></span>
                                         <span id="assetType" class="status-badge status-unknown"><span class="dot"></span><span>Domain</span></span>
                                     </div>
@@ -205,7 +212,7 @@
                     </div>
 
                     <!-- Dashboard View -->
-                    <div id="dashboardView" class="view-section">
+                    <div id="dashboardView" class="view-section" style="display:none;">
                         <div class="dashboard-header">
                             <div class="dashboard-stats">
                                 <div class="stat-card">
