@@ -25,8 +25,12 @@
                         <i class="fas fa-chevron-down chevron"></i>
                     </summary>
                     <div class="nav-subitems">
+                        <!-- Primary navigation -->
                         <a href="javascript:void(0)" class="nav-subitem active" id="leftScannerLink">Scanner</a>
                         <a href="javascript:void(0)" class="nav-subitem" id="leftDashboardLink">Dashboard</a>
+
+                        <!-- Dynamic assets list -->
+                        <div id="assetsList" style="margin-top:8px;"></div>
                     </div>
                 </details>
             </nav>
@@ -65,7 +69,7 @@
                                 </div>
                                 <div class="input-hint">
                                     <i class="fas fa-info-circle"></i>
-                                    Sources: crt.sh, Wayback CDX, Subfinder. Only unique subdomains are shown.
+                                    Sources: crt.sh, Wayback CDX, Subfinder. Unique subdomains are shown.
                                 </div>
                             </div>
                         </div>
@@ -137,6 +141,65 @@
                                     <i class="fas fa-redo"></i>
                                     Try Again
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Asset Detail View -->
+                    <div id="assetDetailView" class="view-section" style="display:none;">
+                        <button id="assetBackBtn" class="action-btn" style="margin-bottom:10px;">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </button>
+
+                        <div class="asset-header card">
+                            <div class="asset-title-row" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                                <div>
+                                    <h2 id="assetName" style="font-size:28px; margin:0 0 6px 0;"></h2>
+                                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                                        <span id="assetRelatedDomain" class="status-badge status-up"><span class="dot"></span><span>Up</span></span>
+                                        <span id="assetCreatedOn" class="status-badge status-unknown"><span class="dot"></span><span>Created on —</span></span>
+                                        <span id="assetType" class="status-badge status-unknown"><span class="dot"></span><span>Domain</span></span>
+                                    </div>
+                                </div>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <button id="assetExportBtn" class="action-btn primary"><i class="fas fa-download"></i> Export</button>
+                                    <button id="assetMonitorBtn" class="monitor-btn"><i class="fas fa-bell-slash"></i><span>Enable Monitoring</span></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tabs" style="display:flex; gap:16px; border-bottom:1px solid #e5e7eb; margin:16px 0;">
+                            <button class="tab-btn active" data-tab="tech">Technologies</button>
+                            <button class="tab-btn" data-tab="history">Scan History</button>
+                        </div>
+
+                        <div id="assetTechTab" class="tab-panel">
+                            <div class="table-wrap">
+                                <table class="sd-table" id="technologiesTable" aria-label="Technologies">
+                                    <thead>
+                                        <tr>
+                                            <th>Vendor</th>
+                                            <th>Product</th>
+                                            <th>Version</th>
+                                            <th>Hosts</th>
+                                            <th>Last seen</th>
+                                            <th>CVE</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="technologiesTableBody">
+                                        <tr><td colspan="6">No technologies detected yet.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div id="assetHistoryTab" class="tab-panel" style="display:none;">
+                            <div id="assetHistoryList" class="scan-history-list">
+                                <div class="empty-state">
+                                    <i class="fas fa-search"></i>
+                                    <h4>No scans yet</h4>
+                                    <p>Run a scan from the Scanner to populate history</p>
+                                </div>
                             </div>
                         </div>
                     </div>
