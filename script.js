@@ -11,7 +11,7 @@ class SubdomainDashboard {
 
         // Inject minimal UI styles (sidebar + table + status badges)
         this.injectUIStyles();
-        
+
         this.initializeElements();
         this.bindEvents();
         this.loadStoredData();
@@ -31,12 +31,13 @@ class SubdomainDashboard {
         .nav-item i { color: #6b7280; }
         .nav-item.active { background: #ffe8d9; color: #f97316; }
         .nav-item.active i { color: #f97316; }
-        .nav-group > summary { list-style: none; }
+        .nav-group > summary { list-style: none; cursor: pointer; }
         .nav-group > summary::-webkit-details-marker { display: none; }
         .nav-group .chevron { margin-left: auto; font-size: 12px; }
         .nav-subitems { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; margin-left: 8px; border-left: 2px solid #f1f5f9; }
-        .nav-subitem { color: #6b7280; font-weight: 600; padding: 6px 10px; border-radius: 10px; }
+        .nav-subitem { color: #374151; font-weight: 600; padding: 6px 10px; border-radius: 10px; }
         .nav-subitem:hover { background: #f3f4f6; }
+        .nav-subitem.active { background: #e0ecff; color: #1d4ed8; }
 
         /* Table */
         .table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
@@ -44,9 +45,9 @@ class SubdomainDashboard {
         .sd-table thead th { background: #f9fafb; text-align: left; font-weight: 700; font-size: 13px; color: #374151; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
         .sd-table tbody td { padding: 10px 12px; font-size: 14px; color: #111827; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
         .sd-table tbody tr:hover { background: #f9fafb; }
-        .sd-table .col-actions { text-align: right; white-space: nowrap; }
+        .sd-table .col-actions { white-space: nowrap; }
 
-        /* Status badge */
+        /* Status badge colors (teal OK, amber warn, red down, grey unknown) */
         .status-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius: 999px; font-weight:700; font-size:12px; border:1px solid #cbd5e0; background:#e2e8f0; color:#2d3748; }
         .status-badge .dot { width:8px; height:8px; border-radius:50%; background:#a0aec0; }
         .status-up { background:#e6fffa; color:#276749; border-color:#9ae6b4; }
@@ -58,7 +59,6 @@ class SubdomainDashboard {
         .status-unknown { background:#edf2f7; color:#4a5568; border-color:#cbd5e0; }
         .status-unknown .dot { background:#a0aec0; }
 
-        /* Keep existing app styling harmony */
         .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
         `;
         const style = document.createElement('style');
@@ -72,14 +72,13 @@ class SubdomainDashboard {
         let apiBase;
         if (apiBaseMetaTag && apiBaseMetaTag.content) {
             apiBase = apiBaseMetaTag.content.replace(/\/$/, '');
-            console.log('Using custom API base from meta tag:', apiBase);
         } else {
             apiBase = `${window.location.origin}/api`;
-            console.log('Using same-origin API base:', apiBase);
         }
         this.crtApiBase = `${apiBase}/crt`;
         this.metaApiBase = `${apiBase}/meta`;
-        console.log('Configured API endpoints:', { crt: this.crtApiBase, meta: this.metaApiBase });
+        this.waybackApiBase = `${apiBase}/wayback`;
+        this.subfinderApiBase = `${apiBase}/subfinder`;
     }
 
     initializeElements() {
@@ -97,9 +96,11 @@ class SubdomainDashboard {
         this.errorMessage = document.getElementById('errorMessage');
         this.retryBtn = document.getElementById('retryBtn');
 
-        // Navigation elements
-        this.scannerTab = document.getElementById('scannerTab');
-        this.dashboardTab = document.getElementById('dashboardTab');
+        // Left navigation elements
+        this.leftScannerLink = document.getElementById('leftScannerLink');
+        this.leftDashboardLink = document.getElementById('leftDashboardLink');
+
+        // Views
         this.scannerView = document.getElementById('scannerView');
         this.dashboardView = document.getElementById('dashboardView');
 
@@ -124,9 +125,9 @@ class SubdomainDashboard {
         this.exportBtn.addEventListener('click', () => this.exportSubdomains());
         this.retryBtn.addEventListener('click', () => this.searchSubdomains());
 
-        // Navigation events
-        this.scannerTab.addEventListener('click', () => this.switchView('scanner'));
-        this.dashboardTab.addEventListener('click', () => this.switchView('dashboard'));
+        // Left navigation switching
+        this.leftScannerLink.addEventListener('click', () => this.switchView('scanner'));
+        this.leftDashboardLink.addEventListener('click', () => this.switchView('dashboard'));
 
         // Dashboard events
         this.clearHistoryBtn.addEventListener('click', () => this.clearHistory());
@@ -196,9 +197,11 @@ class SubdomainDashboard {
     switchView(view) {
         this.currentView = view;
 
-        this.scannerTab.classList.toggle('active', view === 'scanner');
-        this.dashboardTab.classList.toggle('active', view === 'dashboard');
+        // Left nav active states
+        this.leftScannerLink.classList.toggle('active', view === 'scanner');
+        this.leftDashboardLink.classList.toggle('active', view === 'dashboard');
 
+        // View visibility
         this.scannerView.classList.toggle('active', view === 'scanner');
         this.dashboardView.classList.toggle('active', view === 'dashboard');
 
@@ -227,10 +230,23 @@ class SubdomainDashboard {
         this.hideResults();
 
         try {
-            const crtSubdomains = await this.fetchSubdomainsFromCrtSh(domain);
-            const finalSubdomains = Array.from(new Set(crtSubdomains)).sort();
+            // Fetch from all sources in parallel
+            const [crtSubdomains, waybackSubdomains, subfinderSubdomains] = await Promise.allSettled([
+                this.fetchSubdomainsFromCrtSh(domain),
+                this.fetchSubdomainsFromWayback(domain),
+                this.fetchSubdomainsFromSubfinder(domain)
+            ]);
+
+            const crtList = crtSubdomains.status === 'fulfilled' ? crtSubdomains.value : [];
+            const wbList = waybackSubdomains.status === 'fulfilled' ? waybackSubdomains.value : [];
+            const sfList = subfinderSubdomains.status === 'fulfilled' ? subfinderSubdomains.value : [];
+
+            // Merge and deduplicate
+            const merged = new Set([...crtList, ...wbList, ...sfList]);
+            const finalSubdomains = Array.from(merged).sort();
+
             if (finalSubdomains.length === 0) {
-                throw new Error('No subdomains found from crt.sh');
+                throw new Error('No subdomains found from crt.sh, Wayback, or Subfinder');
             }
 
             // Draw the table first
@@ -270,7 +286,44 @@ class SubdomainDashboard {
             });
             return Array.from(subdomains).sort();
         } catch (error) {
-            throw new Error(`Backend server error: ${error.message}`);
+            console.warn('CRT fetch failed:', error);
+            return [];
+        }
+    }
+
+    async fetchSubdomainsFromWayback(domain) {
+        try {
+            const url = `${this.waybackApiBase}?domain=${encodeURIComponent(domain)}`;
+            const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }});
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            if (!Array.isArray(data)) throw new Error('Invalid response format from Wayback');
+            const normalized = data
+                .filter(Boolean)
+                .map(s => String(s).trim().toLowerCase())
+                .filter(s => s.endsWith(`.${domain.toLowerCase()}`) || s === domain.toLowerCase());
+            return Array.from(new Set(normalized)).sort();
+        } catch (error) {
+            console.warn('Wayback fetch failed:', error);
+            return [];
+        }
+    }
+
+    async fetchSubdomainsFromSubfinder(domain) {
+        try {
+            const url = `${this.subfinderApiBase}?domain=${encodeURIComponent(domain)}`;
+            const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }});
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            if (!Array.isArray(data)) throw new Error('Invalid response format from Subfinder');
+            const normalized = data
+                .filter(Boolean)
+                .map(s => String(s).trim().toLowerCase())
+                .filter(s => s.endsWith(`.${domain.toLowerCase()}`) || s === domain.toLowerCase());
+            return Array.from(new Set(normalized)).sort();
+        } catch (error) {
+            console.warn('Subfinder fetch failed:', error);
+            return [];
         }
     }
 
@@ -318,7 +371,7 @@ class SubdomainDashboard {
                     <div class="no-results">
                         <i class="fas fa-search"></i>
                         <h3>No subdomains found</h3>
-                        <p>No subdomains were found for <strong>${this.currentDomain}</strong> in certificate transparency logs.</p>
+                        <p>No subdomains were found for <strong>${this.currentDomain}</strong> in crt.sh, Wayback, or Subfinder.</p>
                     </div>
                 </td></tr>
             `;
@@ -366,14 +419,6 @@ class SubdomainDashboard {
         copyBtn.addEventListener('click', () => navigator.clipboard.writeText(subdomain));
 
         return tr;
-    }
-
-    getStatusLabel(code) {
-        if (typeof code !== 'number') return 'No Response';
-        if (code >= 200 && code < 300) return 'OK';
-        if (code >= 300 && code < 400) return 'Redirect';
-        if (code >= 400 && code < 500) return 'Client Error';
-        return 'Server Error';
     }
 
     updateSubdomainItemUI(subdomain, meta) {
@@ -477,11 +522,11 @@ class SubdomainDashboard {
         const domainCount = Object.keys(this.scanData.domains).length;
         const totalSubdomains = Object.values(this.scanData.domains)
             .reduce((sum, domain) => sum + domain.totalSubdomains, 0);
-        
+
         this.totalDomains.textContent = domainCount;
         this.totalSubdomains.textContent = totalSubdomains;
         this.totalScans.textContent = this.scanData.totalScans;
-        
+
         if (this.scanData.lastScan) {
             const lastScan = new Date(this.scanData.lastScan);
             this.lastScanTime.textContent = this.formatRelativeTime(lastScan);
@@ -526,7 +571,7 @@ class SubdomainDashboard {
         element.dataset.scanId = scan.id;
 
         const scanDate = new Date(scan.timestamp);
-        
+
         element.innerHTML = `
             <div class="history-header">
                 <span class="history-domain">${scan.domain}</span>
@@ -770,7 +815,7 @@ class SubdomainDashboard {
     }
 }
 
-// Global instance for onclick handlers
+// Global instance
 let subdomainDashboard;
 
 // Initialize the application when DOM is loaded
